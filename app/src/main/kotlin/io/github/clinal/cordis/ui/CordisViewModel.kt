@@ -12,7 +12,11 @@ class CordisViewModel(application: Application) : AndroidViewModel(application) 
     val instances = app.instanceRepository.instances
 
     fun addInstance() {
-        app.instanceRepository.addInstance()
+        val instance = app.instanceRepository.addInstance()
+        val intent = Intent(app, RuntimeService::class.java)
+            .setAction(RuntimeService.ACTION_PREPARE)
+            .putExtra(RuntimeService.EXTRA_INSTANCE_ID, instance.id)
+        app.startService(intent)
     }
 
     fun removeInstance(instanceId: String) {
