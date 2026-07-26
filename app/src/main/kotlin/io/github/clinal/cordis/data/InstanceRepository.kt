@@ -18,10 +18,12 @@ class InstanceRepository(context: Context) {
 
     fun addInstance() {
         val nextIndex = nextInstanceIndex()
-        preferences.edit().putStringSet(KEY_INSTANCE_IDS, currentIds() + instanceId(nextIndex)).apply()
+        val id = instanceId(nextIndex)
+        preferences.edit().putStringSet(KEY_INSTANCE_IDS, currentIds() + id).apply()
+        paths.instanceHome(id).mkdirs()
         mutableInstances.update { instances ->
             instances + CordisInstance(
-                id = instanceId(nextIndex),
+                id = id,
                 name = "instance $nextIndex",
                 port = nextAvailablePort(instances),
                 dns = "",
@@ -93,6 +95,7 @@ class InstanceRepository(context: Context) {
     private fun loadInstances(): List<CordisInstance> {
         val ids = currentIds().sortedWith(compareBy(::instanceSortIndex, { it }))
         return ids.mapIndexed { index, id ->
+            paths.instanceHome(id).mkdirs()
             CordisInstance(
                 id = id,
                 name = preferences.getString(instanceKey(id, KEY_NAME), null) ?: defaultName(id),
