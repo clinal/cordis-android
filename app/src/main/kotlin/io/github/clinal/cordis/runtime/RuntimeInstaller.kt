@@ -13,7 +13,7 @@ class RuntimeInstaller(context: Context) {
     private val paths = RuntimePaths(appContext)
 
     fun prepare(instanceId: String, port: Int, onProgress: (String) -> Unit = {}) {
-        installBootstrap(onProgress)
+        prepareBootstrap(onProgress)
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
 
@@ -21,6 +21,12 @@ class RuntimeInstaller(context: Context) {
         seedInstanceTemplate(instanceHome, onProgress)
         ensureForegroundCordisConfig(instanceHome, onProgress)
         ensureAppPortConfig(instanceHome, port, onProgress)
+    }
+
+    fun prepareBootstrap(onProgress: (String) -> Unit = {}) {
+        synchronized(bootstrapInstallLock) {
+            installBootstrap(onProgress)
+        }
     }
 
     fun isBootstrapInstalled(): Boolean = paths.proot.canExecute() && paths.envFile.exists()
@@ -276,6 +282,7 @@ class RuntimeInstaller(context: Context) {
     }
 
     companion object {
+        private val bootstrapInstallLock = Any()
         private const val TAG = "RuntimeInstaller"
         private const val EXECUTABLE_MODE = 448
         private const val PROGRESS_INTERVAL = 500
