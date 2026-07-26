@@ -20,7 +20,6 @@ class RuntimeInstaller(context: Context) {
         val instanceHome = paths.instanceHome(instanceId)
         seedInstanceTemplate(instanceHome, onProgress)
         ensureForegroundCordisConfig(instanceHome, onProgress)
-        seedDefaultAppConfig(instanceHome, onProgress)
         ensureAppPortConfig(instanceHome, port, onProgress)
     }
 
@@ -99,9 +98,7 @@ class RuntimeInstaller(context: Context) {
             return
         }
 
-        seedDefaultConfig(instanceHome)
-        marker.writeText("minimal\n")
-        onProgress("Minimal Cordis config installed.")
+        onProgress("Cordis boilerplate asset is not packaged in this build.")
     }
 
     private fun extractBundledBoilerplate(instanceHome: File): Boolean {
@@ -120,13 +117,6 @@ class RuntimeInstaller(context: Context) {
         }
     }
 
-    private fun seedDefaultConfig(instanceHome: File) {
-        val config = instanceHome.resolve("cordis.yml")
-        if (!config.exists()) {
-            copyAsset("bootstrap/default-cordis.yml", config)
-        }
-    }
-
     private fun ensureForegroundCordisConfig(instanceHome: File, onProgress: (String) -> Unit) {
         val config = instanceHome.resolve("cordis.yml")
         if (!config.exists()) return
@@ -139,14 +129,6 @@ class RuntimeInstaller(context: Context) {
         if (foreground != content) {
             config.writeText(foreground)
             onProgress("Configured Cordis to run in the foreground.")
-        }
-    }
-
-    private fun seedDefaultAppConfig(instanceHome: File, onProgress: (String) -> Unit) {
-        val config = instanceHome.resolve("app.yml")
-        if (!config.exists()) {
-            onProgress("Writing default Cordis app config.")
-            copyAsset("bootstrap/default-app.yml", config)
         }
     }
 
@@ -288,17 +270,6 @@ class RuntimeInstaller(context: Context) {
             } catch (error: Exception) {
                 Log.e(TAG, "Failed to restore bootstrap symlink: $linkTarget -> $relativePath", error)
             }
-        }
-    }
-
-    private fun copyAsset(assetPath: String, destination: File) {
-        try {
-            destination.parentFile?.mkdirs()
-            appContext.assets.open(assetPath).use { input ->
-                destination.outputStream().use { output -> input.copyTo(output) }
-            }
-        } catch (error: FileNotFoundException) {
-            throw BootstrapAssetMissingException(assetPath, error)
         }
     }
 
