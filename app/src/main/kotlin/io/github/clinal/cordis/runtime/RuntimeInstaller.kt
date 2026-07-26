@@ -17,7 +17,9 @@ class RuntimeInstaller(context: Context) {
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
 
-        seedInstanceTemplate(paths.instanceHome(instanceId))
+        val instanceHome = paths.instanceHome(instanceId)
+        seedInstanceTemplate(instanceHome)
+        seedDefaultAppConfig(instanceHome)
     }
 
     fun isBootstrapInstalled(): Boolean = paths.proot.canExecute() && paths.envFile.exists()
@@ -107,6 +109,13 @@ class RuntimeInstaller(context: Context) {
         val config = instanceHome.resolve("cordis.yml")
         if (!config.exists()) {
             copyAsset("bootstrap/default-cordis.yml", config)
+        }
+    }
+
+    private fun seedDefaultAppConfig(instanceHome: File) {
+        val config = instanceHome.resolve("app.yml")
+        if (!config.exists()) {
+            copyAsset("bootstrap/default-app.yml", config)
         }
     }
 

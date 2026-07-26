@@ -27,7 +27,7 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
             "/bin/sh",
             "/bin/login",
             "-c",
-            "cd /home && PROOT_TMP_DIR=/tmp node node_modules/cordis/bin.js run",
+            "cd /home && PROOT_TMP_DIR=/tmp exec node node_modules/cordis/bin.js run --no-daemon",
         )
     }
 }
