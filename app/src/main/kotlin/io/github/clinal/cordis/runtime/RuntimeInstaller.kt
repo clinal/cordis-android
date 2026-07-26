@@ -34,9 +34,7 @@ class RuntimeInstaller(context: Context) {
         val nameserver = dns.trim()
         if (nameserver.isBlank()) return
 
-        val envRoot = paths.envFile.readText().trim().removePrefix("/")
-        val resolvConf = paths.root.resolve(envRoot).resolve("etc/resolv.conf")
-        writeText(resolvConf, "nameserver $nameserver\n")
+        writeText(paths.resolvConf, "nameserver $nameserver\n")
         onProgress("Configured runtime DNS $nameserver.")
     }
 
