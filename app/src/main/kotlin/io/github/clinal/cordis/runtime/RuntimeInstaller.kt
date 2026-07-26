@@ -13,7 +13,6 @@ class RuntimeInstaller(context: Context) {
     private val paths = RuntimePaths(appContext)
 
     fun prepare(instanceId: String, port: Int, onProgress: (String) -> Unit = {}) {
-        prepareBootstrap(onProgress)
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
 
@@ -30,6 +29,17 @@ class RuntimeInstaller(context: Context) {
     }
 
     fun isBootstrapInstalled(): Boolean = paths.proot.canExecute() && paths.envFile.exists()
+
+    fun needsBootstrapInstall(): Boolean {
+        return try {
+            val bundledEnv = readAssetText("bootstrap/env.txt").trim()
+            val installedEnv = paths.envFile.takeIf(File::exists)?.readText()?.trim()
+            !paths.proot.canExecute() || installedEnv != bundledEnv
+        } catch (error: BootstrapAssetMissingException) {
+            Log.i(TAG, "Bootstrap assets are not packaged in this build.", error)
+            false
+        }
+    }
 
     private fun installBootstrap(onProgress: (String) -> Unit) {
         paths.filesDir.mkdirs()

@@ -3,6 +3,7 @@ package io.github.clinal.cordis.ui
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,49 +62,59 @@ import io.github.clinal.cordis.domain.RuntimeStatus
 fun CordisApp(viewModel: CordisViewModel = viewModel()) {
     val context = LocalContext.current
     val instances by viewModel.instances.collectAsState()
+    val bootstrapInstallState by viewModel.bootstrapInstallState.collectAsState()
     var pendingDelete by remember { mutableStateOf<CordisInstance?>(null) }
+    val actionsEnabled = !bootstrapInstallState.installing
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
         ) {
-            Header(
-                instanceCount = instances.size,
-                onAddInstance = viewModel::addInstance,
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                Header(
+                    instanceCount = instances.size,
+                    actionsEnabled = actionsEnabled,
+                    onAddInstance = viewModel::addInstance,
+                )
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(instances, key = { it.id }) { instance ->
-                    InstancePanel(
-                        instance = instance,
-                        onStart = { viewModel.start(instance.id) },
-                        onStop = { viewModel.stop(instance.id) },
-                        onOpenConsole = {
-                            context.startActivity(
-                                Intent(context, ConsoleActivity::class.java)
-                                    .putExtra(ConsoleActivity.EXTRA_URL, instance.consoleUrl),
-                            )
-                        },
-                        onOpenSettings = {
-                            context.startActivity(
-                                Intent(context, InstanceSettingsActivity::class.java)
-                                    .putExtra(InstanceSettingsActivity.EXTRA_INSTANCE_ID, instance.id),
-                            )
-                        },
-                        onRemove = { pendingDelete = instance },
-                    )
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(instances, key = { it.id }) { instance ->
+                        InstancePanel(
+                            instance = instance,
+                            actionsEnabled = actionsEnabled,
+                            onStart = { viewModel.start(instance.id) },
+                            onStop = { viewModel.stop(instance.id) },
+                            onOpenConsole = {
+                                context.startActivity(
+                                    Intent(context, ConsoleActivity::class.java)
+                                        .putExtra(ConsoleActivity.EXTRA_URL, instance.consoleUrl),
+                                )
+                            },
+                            onOpenSettings = {
+                                context.startActivity(
+                                    Intent(context, InstanceSettingsActivity::class.java)
+                                        .putExtra(InstanceSettingsActivity.EXTRA_INSTANCE_ID, instance.id),
+                                )
+                            },
+                            onRemove = { pendingDelete = instance },
+                        )
+                    }
                 }
             }
         }
+
+        if (bootstrapInstallState.installing) {
+            BootstrapInstallOverlay(message = bootstrapInstallState.message)
+        }
     }
 
-    pendingDelete?.let { instance ->
+    if (actionsEnabled) pendingDelete?.let { instance ->
         DeleteInstanceDialog(
             instance = instance,
             onDismiss = { pendingDelete = null },
@@ -117,6 +129,7 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
 @Composable
 private fun Header(
     instanceCount: Int,
+    actionsEnabled: Boolean,
     onAddInstance: () -> Unit,
 ) {
     Row(
@@ -140,7 +153,7 @@ private fun Header(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Button(onClick = onAddInstance) {
+        Button(onClick = onAddInstance, enabled = actionsEnabled) {
             Icon(Icons.Default.Add, contentDescription = null)
             Text("Instance")
         }
@@ -150,6 +163,7 @@ private fun Header(
 @Composable
 private fun InstancePanel(
     instance: CordisInstance,
+    actionsEnabled: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onOpenConsole: () -> Unit,
@@ -197,7 +211,7 @@ private fun InstancePanel(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = { autoScroll = !autoScroll }) {
+                IconButton(onClick = { autoScroll = !autoScroll }, enabled = actionsEnabled) {
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = if (autoScroll) {
@@ -214,23 +228,23 @@ private fun InstancePanel(
                 }
                 IconButton(
                     onClick = onOpenConsole,
-                    enabled = instance.status == RuntimeStatus.Running,
+                    enabled = actionsEnabled && instance.status == RuntimeStatus.Running,
                 ) {
                     Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
                 }
                 IconButton(
                     onClick = onStart,
-                    enabled = instance.status.canStart,
+                    enabled = actionsEnabled && instance.status.canStart,
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
                 }
-                IconButton(onClick = onStop) {
+                IconButton(onClick = onStop, enabled = actionsEnabled) {
                     Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
                 }
-                IconButton(onClick = onOpenSettings) {
+                IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
                     Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
                 }
-                IconButton(onClick = onRemove) {
+                IconButton(onClick = onRemove, enabled = actionsEnabled) {
                     Icon(Icons.Default.Delete, contentDescription = "Remove ${instance.name}")
                 }
             }
@@ -342,7 +356,6 @@ private fun DeleteInstanceDialog(
 @Composable
 private fun StatusChip(status: RuntimeStatus) {
     val label = when (status) {
-        RuntimeStatus.MissingBootstrap -> "Uninitialized"
         RuntimeStatus.Stopped -> "Stopped"
         RuntimeStatus.Starting -> "Starting"
         RuntimeStatus.Running -> "Running"
@@ -350,6 +363,44 @@ private fun StatusChip(status: RuntimeStatus) {
         RuntimeStatus.Failed -> "Failed"
     }
     AssistChip(onClick = {}, label = { Text(label) })
+}
+
+@Composable
+private fun BootstrapInstallOverlay(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent().changes.forEach { change -> change.consume() }
+                    }
+                }
+            }
+            .padding(32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "Extracting runtime bootstrap",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(
+                text = message.ifBlank { "Preparing Cordis runtime." },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable
