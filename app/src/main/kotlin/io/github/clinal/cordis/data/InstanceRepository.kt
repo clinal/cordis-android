@@ -109,27 +109,20 @@ class InstanceRepository(context: Context) {
     }
 
     private fun defaultName(id: String): String {
-        return if (id == DEFAULT_INSTANCE_ID) "default" else "instance ${instanceSortIndex(id)}"
+        return "instance ${instanceSortIndex(id)}"
     }
 
     private fun currentIds(): Set<String> {
-        return if (preferences.contains(KEY_INSTANCE_IDS)) {
-            preferences.getStringSet(KEY_INSTANCE_IDS, emptySet()).orEmpty()
-        } else {
-            setOf(DEFAULT_INSTANCE_ID)
-        }
+        return preferences.getStringSet(KEY_INSTANCE_IDS, emptySet()).orEmpty() - DEFAULT_INSTANCE_ID
     }
 
     private fun nextInstanceIndex(): Int {
         val used = currentIds().map(::instanceSortIndex).toSet()
-        return generateSequence(2) { it + 1 }.first { it !in used }
+        return generateSequence(1) { it + 1 }.first { it !in used }
     }
 
     private fun instanceSortIndex(id: String): Int {
-        return when (id) {
-            DEFAULT_INSTANCE_ID -> 1
-            else -> id.removePrefix(INSTANCE_ID_PREFIX).toIntOrNull() ?: Int.MAX_VALUE
-        }
+        return id.removePrefix(INSTANCE_ID_PREFIX).toIntOrNull() ?: Int.MAX_VALUE
     }
 
     private fun instanceId(index: Int): String = "$INSTANCE_ID_PREFIX$index"
