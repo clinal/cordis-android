@@ -139,35 +139,19 @@ class RuntimeInstaller(context: Context) {
         val original = config.readLines()
         val updated = mutableListOf<String>()
         var inServerPlugin = false
-        var foundServerPlugin = false
-        var foundConfig = false
         var replacedPort = false
-
-        fun finishServerPlugin() {
-            if (!inServerPlugin) return
-            if (!foundConfig) {
-                updated += "  config:"
-            }
-            if (!replacedPort) {
-                updated += "    port: $port"
-            }
-        }
 
         original.forEach { line ->
             val trimmed = line.trim()
-            if (trimmed.startsWith("- name:")) {
-                finishServerPlugin()
-                inServerPlugin = trimmed == "- name: '@cordisjs/plugin-server'" ||
-                    trimmed == "- name: \"@cordisjs/plugin-server\""
-                foundServerPlugin = foundServerPlugin || inServerPlugin
-                foundConfig = false
-                replacedPort = false
-                updated += line
-                return@forEach
+            if (line.startsWith("- ")) {
+                inServerPlugin = false
             }
 
-            if (inServerPlugin && trimmed.startsWith("config:")) {
-                foundConfig = true
+            if (line.topLevelPluginName() != null) {
+                val pluginName = line.topLevelPluginName()
+                inServerPlugin = pluginName == "@cordisjs/plugin-server"
+                updated += line
+                return@forEach
             }
 
             if (inServerPlugin && trimmed.startsWith("port:")) {
@@ -179,19 +163,24 @@ class RuntimeInstaller(context: Context) {
             }
         }
 
-        finishServerPlugin()
-        if (!foundServerPlugin) {
-            updated += "- name: '@cordisjs/plugin-server'"
-            updated += "  config:"
-            updated += "    host: 127.0.0.1"
-            updated += "    port: $port"
-        }
-
         val updatedText = updated.joinToString(separator = "\n", postfix = "\n")
         if (updatedText != config.readText()) {
             config.writeText(updatedText)
             onProgress("Configured Cordis app port $port.")
+        } else if (!replacedPort) {
+            onProgress("Cordis app port was not found in app.yml.")
         }
+    }
+
+    private fun String.topLevelPluginName(): String? {
+        val indent = takeWhile(Char::isWhitespace).length
+        val trimmed = trim()
+        val nameValue = when {
+            indent == 2 && trimmed.startsWith("name:") -> trimmed.removePrefix("name:")
+            indent == 0 && trimmed.startsWith("- name:") -> trimmed.removePrefix("- name:")
+            else -> return null
+        }
+        return nameValue.trim().trim('\'', '"')
     }
 
     private fun unpackZip(
