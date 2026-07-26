@@ -24,7 +24,7 @@ class InstanceRepository(context: Context) {
             id = id,
             name = "instance $nextIndex",
             port = nextAvailablePort(currentInstances),
-            dns = "",
+            dns = DEFAULT_DNS,
             status = initialStatus(),
             lastLogLines = listOf("Press Start to prepare the Cordis runtime."),
         )
@@ -49,7 +49,7 @@ class InstanceRepository(context: Context) {
     fun updateInstanceConfig(id: String, name: String, port: Int, dns: String) {
         val sanitizedName = name.trim().ifBlank { defaultName(id) }
         val sanitizedPort = port.coerceIn(MIN_PORT, MAX_PORT)
-        val sanitizedDns = dns.trim()
+        val sanitizedDns = dns.trim().ifBlank { DEFAULT_DNS }
         mutableInstances.update { instances ->
             instances.map { instance ->
                 if (instance.id == id) {
@@ -116,7 +116,10 @@ class InstanceRepository(context: Context) {
                 name = preferences.getString(instanceKey(id, KEY_NAME), null) ?: defaultName(id),
                 port = preferences.getInt(instanceKey(id, KEY_PORT), DEFAULT_BASE_PORT + index)
                     .coerceIn(MIN_PORT, MAX_PORT),
-                dns = preferences.getString(instanceKey(id, KEY_DNS), null).orEmpty(),
+                dns = preferences.getString(instanceKey(id, KEY_DNS), null)
+                    ?.trim()
+                    ?.ifBlank { DEFAULT_DNS }
+                    ?: DEFAULT_DNS,
                 status = initialStatus(),
                 lastLogLines = listOf("Press Start to prepare the Cordis runtime."),
             )
@@ -175,6 +178,7 @@ class InstanceRepository(context: Context) {
     companion object {
         const val DEFAULT_INSTANCE_ID = "default"
         const val DEFAULT_BASE_PORT = 3140
+        const val DEFAULT_DNS = "223.5.5.5"
         private const val PREFERENCES_NAME = "cordis_instances"
         private const val KEY_INSTANCE_IDS = "instance_ids"
         private const val KEY_NAME = "name"
