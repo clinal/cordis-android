@@ -11,12 +11,11 @@ android {
 
     val ciKeystoreFile = System.getenv("CORDIS_ANDROID_KEYSTORE_FILE")
     val ciKeystorePassword = System.getenv("CORDIS_ANDROID_KEYSTORE_PASSWORD")
-    val ciKeyAlias = System.getenv("CORDIS_ANDROID_KEY_ALIAS")
-    val ciKeyPassword = System.getenv("CORDIS_ANDROID_KEY_PASSWORD")
+    val ciKeyAlias = System.getenv("CORDIS_ANDROID_KEY_ALIAS").takeUnless { it.isNullOrBlank() } ?: "cordis-ci"
+    val ciKeyPassword = System.getenv("CORDIS_ANDROID_KEY_PASSWORD").takeUnless { it.isNullOrBlank() } ?: ciKeystorePassword
     val hasCiSigning = listOf(
         ciKeystoreFile,
         ciKeystorePassword,
-        ciKeyAlias,
         ciKeyPassword,
     ).all { !it.isNullOrBlank() }
 
