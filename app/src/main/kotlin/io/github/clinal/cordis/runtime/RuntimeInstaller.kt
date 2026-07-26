@@ -68,37 +68,55 @@ class RuntimeInstaller(context: Context) {
     }
 
     private fun unpackBootstrap(onProgress: (String) -> Unit) {
-        if (paths.root.exists()) {
-            onProgress("Repairing existing bootstrap directory.")
-            unpackZip(
-                assetPath = "bootstrap/bootstrap.zip",
-                target = paths.root,
-                restoreMetadata = true,
-                onProgress = onProgress,
-            )
-            return
-        }
-
         val staging = paths.filesDir.resolve("data-staging")
+        val backup = paths.filesDir.resolve("data-backup")
+        if (!paths.root.exists() && backup.exists() && !backup.renameTo(paths.root)) {
+            error("Cannot restore bootstrap backup directory.")
+        }
         if (staging.exists()) {
             staging.deleteRecursively()
+        }
+        if (backup.exists()) {
+            backup.deleteRecursively()
         }
         if (!staging.mkdirs()) {
             error("Cannot create bootstrap staging directory: ${staging.absolutePath}")
         }
 
         try {
+            if (paths.root.exists()) {
+                onProgress("Repairing existing bootstrap directory.")
+            }
             unpackZip(
                 assetPath = "bootstrap/bootstrap.zip",
                 target = staging,
                 restoreMetadata = true,
                 onProgress = onProgress,
             )
-            if (!paths.root.exists() && !staging.renameTo(paths.root)) {
+            moveBootstrapIntoPlace(staging, backup)
+        } catch (error: Throwable) {
+            staging.deleteRecursively()
+            if (!paths.root.exists() && backup.exists()) {
+                backup.renameTo(paths.root)
+            }
+            throw error
+        } finally {
+            backup.deleteRecursively()
+        }
+    }
+
+    private fun moveBootstrapIntoPlace(staging: File, backup: File) {
+        if (paths.root.exists() && !paths.root.renameTo(backup)) {
+            error("Cannot move existing bootstrap directory aside.")
+        }
+        try {
+            if (!staging.renameTo(paths.root)) {
                 error("Cannot move bootstrap staging directory into place.")
             }
         } catch (error: Throwable) {
-            staging.deleteRecursively()
+            if (!paths.root.exists() && backup.exists()) {
+                backup.renameTo(paths.root)
+            }
             throw error
         }
     }
