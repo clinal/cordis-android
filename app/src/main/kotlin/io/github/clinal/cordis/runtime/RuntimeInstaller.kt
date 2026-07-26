@@ -12,27 +12,31 @@ class RuntimeInstaller(context: Context) {
     private val appContext = context.applicationContext
     private val paths = RuntimePaths(appContext)
 
-    fun prepare(instanceId: String) {
-        installBootstrap()
+    fun prepare(instanceId: String, onProgress: (String) -> Unit = {}) {
+        installBootstrap(onProgress)
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
 
         val instanceHome = paths.instanceHome(instanceId)
-        seedInstanceTemplate(instanceHome)
-        seedDefaultAppConfig(instanceHome)
+        seedInstanceTemplate(instanceHome, onProgress)
+        ensureForegroundCordisConfig(instanceHome, onProgress)
+        seedDefaultAppConfig(instanceHome, onProgress)
     }
 
     fun isBootstrapInstalled(): Boolean = paths.proot.canExecute() && paths.envFile.exists()
 
-    private fun installBootstrap() {
+    private fun installBootstrap(onProgress: (String) -> Unit) {
         paths.filesDir.mkdirs()
 
         try {
             if (!paths.proot.canExecute()) {
-                unpackBootstrap()
+                onProgress("Installing runtime bootstrap.")
+                unpackBootstrap(onProgress)
+                onProgress("Runtime bootstrap installed.")
             }
 
             if (!paths.envFile.exists()) {
+                onProgress("Writing bootstrap environment.")
                 copyAsset("bootstrap/env.txt", paths.envFile)
             }
 
@@ -43,12 +47,14 @@ class RuntimeInstaller(context: Context) {
         }
     }
 
-    private fun unpackBootstrap() {
+    private fun unpackBootstrap(onProgress: (String) -> Unit) {
         if (paths.root.exists()) {
+            onProgress("Repairing existing bootstrap directory.")
             unpackZip(
                 assetPath = "bootstrap/bootstrap.zip",
                 target = paths.root,
                 restoreMetadata = true,
+                onProgress = onProgress,
             )
             return
         }
@@ -66,6 +72,7 @@ class RuntimeInstaller(context: Context) {
                 assetPath = "bootstrap/bootstrap.zip",
                 target = staging,
                 restoreMetadata = true,
+                onProgress = onProgress,
             )
             if (!paths.root.exists() && !staging.renameTo(paths.root)) {
                 error("Cannot move bootstrap staging directory into place.")
@@ -76,17 +83,20 @@ class RuntimeInstaller(context: Context) {
         }
     }
 
-    private fun seedInstanceTemplate(instanceHome: File) {
+    private fun seedInstanceTemplate(instanceHome: File, onProgress: (String) -> Unit) {
         val marker = instanceHome.resolve(".cordis-android-template")
         if (marker.exists()) return
 
+        onProgress("Seeding Cordis project template.")
         if (extractBundledBoilerplate(instanceHome)) {
             marker.writeText("${BoilerplateRelease.Version}\n")
+            onProgress("Cordis project template installed.")
             return
         }
 
         seedDefaultConfig(instanceHome)
         marker.writeText("minimal\n")
+        onProgress("Minimal Cordis config installed.")
     }
 
     private fun extractBundledBoilerplate(instanceHome: File): Boolean {
@@ -112,16 +122,38 @@ class RuntimeInstaller(context: Context) {
         }
     }
 
-    private fun seedDefaultAppConfig(instanceHome: File) {
+    private fun ensureForegroundCordisConfig(instanceHome: File, onProgress: (String) -> Unit) {
+        val config = instanceHome.resolve("cordis.yml")
+        if (!config.exists()) return
+
+        val content = config.readText()
+        val foreground = content.replace(
+            oldValue = "daemon:\n      enabled: true",
+            newValue = "daemon:\n      enabled: false",
+        )
+        if (foreground != content) {
+            config.writeText(foreground)
+            onProgress("Configured Cordis to run in the foreground.")
+        }
+    }
+
+    private fun seedDefaultAppConfig(instanceHome: File, onProgress: (String) -> Unit) {
         val config = instanceHome.resolve("app.yml")
         if (!config.exists()) {
+            onProgress("Writing default Cordis app config.")
             copyAsset("bootstrap/default-app.yml", config)
         }
     }
 
-    private fun unpackZip(assetPath: String, target: File, restoreMetadata: Boolean) {
+    private fun unpackZip(
+        assetPath: String,
+        target: File,
+        restoreMetadata: Boolean,
+        onProgress: (String) -> Unit = {},
+    ) {
         val executables = mutableListOf<String>()
         val symlinks = mutableListOf<Pair<String, String>>()
+        var extractedEntries = 0
 
         appContext.assets.open(assetPath).use { input ->
             ZipInputStream(input).use { zip ->
@@ -140,12 +172,17 @@ class RuntimeInstaller(context: Context) {
                             }
                         else -> writeZipEntry(target, entry.name, entry.isDirectory, zip)
                     }
+                    extractedEntries += 1
+                    if (extractedEntries == 1 || extractedEntries % PROGRESS_INTERVAL == 0) {
+                        onProgress("Extracted $extractedEntries bootstrap files.")
+                    }
                     zip.closeEntry()
                 }
             }
         }
 
         if (restoreMetadata) {
+            onProgress("Restoring bootstrap executable metadata.")
             restoreExecutables(target, executables)
             restoreSymlinks(target, symlinks)
         }
@@ -201,6 +238,7 @@ class RuntimeInstaller(context: Context) {
     companion object {
         private const val TAG = "RuntimeInstaller"
         private const val EXECUTABLE_MODE = 448
+        private const val PROGRESS_INTERVAL = 500
         private const val SYMLINK_SEPARATOR = '←'
     }
 }

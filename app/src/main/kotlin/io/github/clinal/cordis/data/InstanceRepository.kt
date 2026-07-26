@@ -14,7 +14,7 @@ class InstanceRepository(context: Context) {
         name = "default",
         port = 5140,
         status = initialStatus(),
-        lastLogLines = listOf("Waiting for runtime bootstrap assets."),
+        lastLogLines = listOf("Press Start to prepare the Cordis runtime."),
     )
 
     private val mutableInstances = MutableStateFlow(listOf(defaultInstance))

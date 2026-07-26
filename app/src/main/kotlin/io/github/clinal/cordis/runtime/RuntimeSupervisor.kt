@@ -22,18 +22,19 @@ class RuntimeSupervisor(
     fun start(instanceId: String) {
         if (processes.containsKey(instanceId)) return
 
-        installer.prepare(instanceId)
-        if (!installer.isBootstrapInstalled()) {
-            instanceRepository.updateStatus(
-                instanceId,
-                RuntimeStatus.MissingBootstrap,
-                "Runtime bootstrap is not installed yet.",
-            )
-            return
-        }
-
         scope.launch {
-            instanceRepository.updateStatus(instanceId, RuntimeStatus.Starting, "Starting Cordis runtime.")
+            instanceRepository.updateStatus(instanceId, RuntimeStatus.Starting, "Preparing Cordis runtime.")
+            installer.prepare(instanceId) { line -> instanceRepository.appendLog(instanceId, line) }
+            if (!installer.isBootstrapInstalled()) {
+                instanceRepository.updateStatus(
+                    instanceId,
+                    RuntimeStatus.MissingBootstrap,
+                    "Runtime bootstrap is not installed yet.",
+                )
+                return@launch
+            }
+
+            instanceRepository.appendLog(instanceId, "Starting Cordis with yarn start.")
             val command = commandBuilder.cordisCommand(instanceId)
             val process = ProcessBuilder(command)
                 .redirectErrorStream(true)

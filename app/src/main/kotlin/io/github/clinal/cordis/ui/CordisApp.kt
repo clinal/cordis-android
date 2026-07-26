@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -133,6 +133,10 @@ private fun InstancePanel(
                 }
             }
 
+            if (instance.status == RuntimeStatus.Starting) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
             LogPanel(lines = instance.lastLogLines)
         }
     }
@@ -152,7 +156,7 @@ private fun StatusChip(status: RuntimeStatus) {
 
 @Composable
 private fun LogPanel(lines: List<String>) {
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
             .height(220.dp)
@@ -160,16 +164,15 @@ private fun LogPanel(lines: List<String>) {
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        lines.takeLast(12).forEach { line ->
+        items(lines.takeLast(80)) { line ->
             Text(
                 text = line,
                 color = Color(0xFFE6EDF3),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
-                maxLines = 1,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
     }
 }

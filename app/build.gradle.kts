@@ -9,6 +9,17 @@ android {
     compileSdk = 35
     buildToolsVersion = "35.0.0"
 
+    val ciKeystoreFile = System.getenv("CORDIS_ANDROID_KEYSTORE_FILE")
+    val ciKeystorePassword = System.getenv("CORDIS_ANDROID_KEYSTORE_PASSWORD")
+    val ciKeyAlias = System.getenv("CORDIS_ANDROID_KEY_ALIAS")
+    val ciKeyPassword = System.getenv("CORDIS_ANDROID_KEY_PASSWORD")
+    val hasCiSigning = listOf(
+        ciKeystoreFile,
+        ciKeystorePassword,
+        ciKeyAlias,
+        ciKeyPassword,
+    ).all { !it.isNullOrBlank() }
+
     defaultConfig {
         applicationId = "io.github.clinal.cordis"
         minSdk = 28
@@ -17,9 +28,28 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        if (hasCiSigning) {
+            create("ci") {
+                storeFile = file(ciKeystoreFile!!)
+                storePassword = ciKeystorePassword
+                keyAlias = ciKeyAlias
+                keyPassword = ciKeyPassword
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (hasCiSigning) {
+                signingConfig = signingConfigs.getByName("ci")
+            }
+        }
         release {
             isMinifyEnabled = false
+            if (hasCiSigning) {
+                signingConfig = signingConfigs.getByName("ci")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
