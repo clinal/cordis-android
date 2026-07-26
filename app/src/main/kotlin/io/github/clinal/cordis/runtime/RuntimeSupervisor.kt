@@ -26,8 +26,14 @@ class RuntimeSupervisor(
 
         scope.launch {
             try {
+                val instance = instanceRepository.instance(instanceId)
+                if (instance == null) {
+                    instanceRepository.updateStatus(instanceId, RuntimeStatus.Failed, "Instance configuration was not found.")
+                    return@launch
+                }
+
                 instanceRepository.updateStatus(instanceId, RuntimeStatus.Starting, "Preparing Cordis runtime.")
-                installer.prepare(instanceId) { line -> instanceRepository.appendLog(instanceId, line) }
+                installer.prepare(instanceId, instance.port) { line -> instanceRepository.appendLog(instanceId, line) }
                 if (!installer.isBootstrapInstalled()) {
                     instanceRepository.updateStatus(
                         instanceId,
