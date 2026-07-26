@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
@@ -33,7 +34,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -156,6 +156,8 @@ private fun InstancePanel(
     onOpenSettings: () -> Unit,
     onRemove: () -> Unit,
 ) {
+    var autoScroll by remember(instance.id) { mutableStateOf(true) }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -195,6 +197,21 @@ private fun InstancePanel(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                IconButton(onClick = { autoScroll = !autoScroll }) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (autoScroll) {
+                            "Disable ${instance.name} log auto-scroll"
+                        } else {
+                            "Enable ${instance.name} log auto-scroll"
+                        },
+                        tint = if (autoScroll) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
                 IconButton(onClick = onOpenConsole) {
                     Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
                 }
@@ -219,7 +236,7 @@ private fun InstancePanel(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
-            LogPanel(lines = instance.lastLogLines)
+            LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
         }
     }
 }
@@ -333,8 +350,7 @@ private fun StatusChip(status: RuntimeStatus) {
 }
 
 @Composable
-private fun LogPanel(lines: List<String>) {
-    var autoScroll by remember { mutableStateOf(true) }
+private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
     val listState = rememberLazyListState()
     val visibleLines = lines.takeLast(80)
 
@@ -344,37 +360,23 @@ private fun LogPanel(lines: List<String>) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
+    SelectionContainer {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .background(Color(0xFF101418))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = "Auto-scroll",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Switch(checked = autoScroll, onCheckedChange = { autoScroll = it })
-        }
-        SelectionContainer {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .background(Color(0xFF101418))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(visibleLines) { line ->
-                    Text(
-                        text = line,
-                        color = Color(0xFFE6EDF3),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
+            items(visibleLines) { line ->
+                Text(
+                    text = line,
+                    color = Color(0xFFE6EDF3),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
             }
         }
     }
