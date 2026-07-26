@@ -212,7 +212,10 @@ private fun InstancePanel(
                         },
                     )
                 }
-                IconButton(onClick = onOpenConsole) {
+                IconButton(
+                    onClick = onOpenConsole,
+                    enabled = instance.status == RuntimeStatus.Running,
+                ) {
                     Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
                 }
                 IconButton(
