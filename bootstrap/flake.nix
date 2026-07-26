@@ -15,11 +15,11 @@
     flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs { inherit system; };
-      boilerplateVersion = "v0.6.0";
-      boilerplateAsset = "boilerplate-v0.6.0-linux-arm64-node24.zip";
+      boilerplateVersion = "v0.6.1";
+      boilerplateAsset = "boilerplate-v0.6.1-linux-arm64-node24.zip";
       boilerplate = pkgs.fetchurl {
         url = "https://github.com/cordiverse/boilerplate/releases/download/${boilerplateVersion}/${boilerplateAsset}";
-        hash = "sha256-5BXU+mieF5K+HM9Z5sbOMviLnn8Fqys8TbJjjemMi3Q=";
+        hash = "sha256-TeOvkWAEPxTML6XMtf/bv90oe1BaYwDcxEYCcwOBxXI=";
       };
       bootstrap = pkgs.callPackage ./bootstrap.nix {
         inherit inputs;
@@ -39,7 +39,7 @@
         source=https://github.com/cordiverse/boilerplate/releases/download/${boilerplateVersion}/${boilerplateAsset}
         version=${boilerplateVersion}
         asset=${boilerplateAsset}
-        sha256=e415d4fa689e1792be1ccf59e6c6ce32f88b9e7f05ab2b3c4db2638de98c8b74
+        sha256=4de3af9160043f14cc2fa5ccb5ffdbbfdd287b505a6300dcc44602730381c572
         EOF
         cat > $out/README.txt <<'EOF'
         This package contains Android bootstrap assets:
