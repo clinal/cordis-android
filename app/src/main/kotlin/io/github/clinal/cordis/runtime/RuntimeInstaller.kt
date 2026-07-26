@@ -24,23 +24,33 @@ class RuntimeInstaller(context: Context) {
 
     private fun installBootstrap() {
         paths.filesDir.mkdirs()
-        paths.tmp.mkdirs()
-        paths.shm.mkdirs()
 
         try {
-            if (!paths.root.exists()) {
+            if (!paths.proot.canExecute()) {
                 unpackBootstrap()
             }
 
             if (!paths.envFile.exists()) {
                 copyAsset("bootstrap/env.txt", paths.envFile)
             }
+
+            paths.tmp.mkdirs()
+            paths.shm.mkdirs()
         } catch (error: BootstrapAssetMissingException) {
             Log.i(TAG, "Bootstrap assets are not packaged in this build.", error)
         }
     }
 
     private fun unpackBootstrap() {
+        if (paths.root.exists()) {
+            unpackZip(
+                assetPath = "bootstrap/bootstrap.zip",
+                target = paths.root,
+                restoreMetadata = true,
+            )
+            return
+        }
+
         val staging = paths.filesDir.resolve("data-staging")
         if (staging.exists()) {
             staging.deleteRecursively()
@@ -55,7 +65,7 @@ class RuntimeInstaller(context: Context) {
                 target = staging,
                 restoreMetadata = true,
             )
-            if (!staging.renameTo(paths.root)) {
+            if (!paths.root.exists() && !staging.renameTo(paths.root)) {
                 error("Cannot move bootstrap staging directory into place.")
             }
         } catch (error: Throwable) {
