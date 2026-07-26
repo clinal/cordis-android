@@ -55,6 +55,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.domain.CordisInstance
 import io.github.clinal.cordis.domain.RuntimeStatus
 
@@ -311,7 +312,7 @@ fun InstanceSettingsPanel(
                 value = dnsText,
                 onValueChange = { dnsText = it.take(64) },
                 label = { Text("DNS") },
-                placeholder = { Text("System default") },
+                placeholder = { Text(InstanceRepository.DEFAULT_DNS) },
                 singleLine = true,
             )
             Row(

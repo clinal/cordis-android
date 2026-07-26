@@ -69,9 +69,7 @@ class RuntimeSupervisor(
                     .redirectErrorStream(true)
                     .also { builder ->
                         builder.environment()["PROOT_TMP_DIR"] = RuntimePaths(appContext).tmp.absolutePath
-                        if (instance.dns.isNotBlank()) {
-                            builder.environment()["CORDIS_DNS"] = instance.dns
-                        }
+                        builder.environment()["CORDIS_DNS"] = instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }
                     }
                     .start()
                 processes[instanceId] = process
