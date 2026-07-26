@@ -81,9 +81,12 @@ private fun SettingsHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Settings",
@@ -99,9 +102,6 @@ private fun SettingsHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
         }
     }
 }
