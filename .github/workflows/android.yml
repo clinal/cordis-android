@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     env:
       CORDIS_ANDROID_KEYSTORE_BASE64: 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
       CORDIS_ANDROID_KEYSTORE_PASSWORD: cordis-ci-pass
@@ -28,6 +29,12 @@ jobs:
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Configure Gradle cache
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Free runner disk space
         run: |
@@ -47,7 +54,7 @@ jobs:
           printf '%s' "$CORDIS_ANDROID_KEYSTORE_BASE64" | base64 -d > "$CORDIS_ANDROID_KEYSTORE_FILE"
 
       - name: Build debug APK
-        run: nix develop --command gradle -PcordisBootstrapAssetsDir=result clean assembleDebug
+        run: nix develop --command gradle -PcordisBootstrapAssetsDir=result --build-cache clean assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
