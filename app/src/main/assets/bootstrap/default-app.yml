@@ -1,7 +1,7 @@
 - name: '@cordisjs/plugin-server'
   config:
     host: 127.0.0.1
-    port: 5140
+    port: 3140
 - name: '@cordisjs/plugin-webui'
   config:
     uiPath: /

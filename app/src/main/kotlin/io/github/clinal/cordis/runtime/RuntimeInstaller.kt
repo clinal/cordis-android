@@ -12,7 +12,7 @@ class RuntimeInstaller(context: Context) {
     private val appContext = context.applicationContext
     private val paths = RuntimePaths(appContext)
 
-    fun prepare(instanceId: String, onProgress: (String) -> Unit = {}) {
+    fun prepare(instanceId: String, port: Int, onProgress: (String) -> Unit = {}) {
         installBootstrap(onProgress)
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
@@ -21,6 +21,7 @@ class RuntimeInstaller(context: Context) {
         seedInstanceTemplate(instanceHome, onProgress)
         ensureForegroundCordisConfig(instanceHome, onProgress)
         seedDefaultAppConfig(instanceHome, onProgress)
+        ensureAppPortConfig(instanceHome, port, onProgress)
     }
 
     fun isBootstrapInstalled(): Boolean = paths.proot.canExecute() && paths.envFile.exists()
@@ -146,6 +147,68 @@ class RuntimeInstaller(context: Context) {
         if (!config.exists()) {
             onProgress("Writing default Cordis app config.")
             copyAsset("bootstrap/default-app.yml", config)
+        }
+    }
+
+    private fun ensureAppPortConfig(instanceHome: File, port: Int, onProgress: (String) -> Unit) {
+        val config = instanceHome.resolve("app.yml")
+        if (!config.exists()) return
+
+        val original = config.readLines()
+        val updated = mutableListOf<String>()
+        var inServerPlugin = false
+        var foundServerPlugin = false
+        var foundConfig = false
+        var replacedPort = false
+
+        fun finishServerPlugin() {
+            if (!inServerPlugin) return
+            if (!foundConfig) {
+                updated += "  config:"
+            }
+            if (!replacedPort) {
+                updated += "    port: $port"
+            }
+        }
+
+        original.forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.startsWith("- name:")) {
+                finishServerPlugin()
+                inServerPlugin = trimmed == "- name: '@cordisjs/plugin-server'" ||
+                    trimmed == "- name: \"@cordisjs/plugin-server\""
+                foundServerPlugin = foundServerPlugin || inServerPlugin
+                foundConfig = false
+                replacedPort = false
+                updated += line
+                return@forEach
+            }
+
+            if (inServerPlugin && trimmed.startsWith("config:")) {
+                foundConfig = true
+            }
+
+            if (inServerPlugin && trimmed.startsWith("port:")) {
+                val indent = line.takeWhile(Char::isWhitespace)
+                updated += "${indent}port: $port"
+                replacedPort = true
+            } else {
+                updated += line
+            }
+        }
+
+        finishServerPlugin()
+        if (!foundServerPlugin) {
+            updated += "- name: '@cordisjs/plugin-server'"
+            updated += "  config:"
+            updated += "    host: 127.0.0.1"
+            updated += "    port: $port"
+        }
+
+        val updatedText = updated.joinToString(separator = "\n", postfix = "\n")
+        if (updatedText != config.readText()) {
+            config.writeText(updatedText)
+            onProgress("Configured Cordis app port $port.")
         }
     }
 

@@ -10,6 +10,20 @@ import io.github.clinal.cordis.runtime.RuntimeService
 class CordisViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as CordisApplication
     val instances = app.instanceRepository.instances
+    val settings = app.instanceRepository.settings
+
+    fun addInstance() {
+        app.instanceRepository.addInstance()
+    }
+
+    fun removeInstance(instanceId: String) {
+        stop(instanceId)
+        app.instanceRepository.removeInstance(instanceId)
+    }
+
+    fun updateBasePort(port: Int) {
+        app.instanceRepository.updateBasePort(port)
+    }
 
     fun start(instanceId: String = InstanceRepository.DEFAULT_INSTANCE_ID) {
         val intent = Intent(app, RuntimeService::class.java)
