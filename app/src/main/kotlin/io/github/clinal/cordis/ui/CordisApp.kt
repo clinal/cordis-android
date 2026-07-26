@@ -1,5 +1,6 @@
 package io.github.clinal.cordis.ui
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,15 +11,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -29,9 +33,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,22 +46,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import io.github.clinal.cordis.data.InstanceRepository
-import io.github.clinal.cordis.domain.AppSettings
 import io.github.clinal.cordis.domain.CordisInstance
 import io.github.clinal.cordis.domain.RuntimeStatus
 
 @Composable
 fun CordisApp(viewModel: CordisViewModel = viewModel()) {
+    val context = LocalContext.current
     val instances by viewModel.instances.collectAsState()
-    val settings by viewModel.settings.collectAsState()
-    var showingSettings by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<CordisInstance?>(null) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -68,78 +73,76 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Header(
-                showingSettings = showingSettings,
                 instanceCount = instances.size,
                 onAddInstance = viewModel::addInstance,
-                onOpenSettings = { showingSettings = true },
-                onCloseSettings = { showingSettings = false },
             )
 
-            if (showingSettings) {
-                SettingsPanel(
-                    settings = settings,
-                    onSaveBasePort = viewModel::updateBasePort,
-                )
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(instances, key = { it.id }) { instance ->
-                        InstancePanel(
-                            instance = instance,
-                            removable = instance.id != InstanceRepository.DEFAULT_INSTANCE_ID,
-                            onStart = { viewModel.start(instance.id) },
-                            onStop = { viewModel.stop(instance.id) },
-                            onRemove = { viewModel.removeInstance(instance.id) },
-                        )
-                    }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(instances, key = { it.id }) { instance ->
+                    InstancePanel(
+                        instance = instance,
+                        onStart = { viewModel.start(instance.id) },
+                        onStop = { viewModel.stop(instance.id) },
+                        onOpenConsole = {
+                            context.startActivity(
+                                Intent(context, ConsoleActivity::class.java)
+                                    .putExtra(ConsoleActivity.EXTRA_URL, instance.consoleUrl),
+                            )
+                        },
+                        onOpenSettings = {
+                            context.startActivity(
+                                Intent(context, InstanceSettingsActivity::class.java)
+                                    .putExtra(InstanceSettingsActivity.EXTRA_INSTANCE_ID, instance.id),
+                            )
+                        },
+                        onRemove = { pendingDelete = instance },
+                    )
                 }
             }
         }
+    }
+
+    pendingDelete?.let { instance ->
+        DeleteInstanceDialog(
+            instance = instance,
+            onDismiss = { pendingDelete = null },
+            onConfirm = {
+                viewModel.removeInstance(instance.id)
+                pendingDelete = null
+            },
+        )
     }
 }
 
 @Composable
 private fun Header(
-    showingSettings: Boolean,
     instanceCount: Int,
     onAddInstance: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onCloseSettings: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (showingSettings) "Settings" else "Cordis",
+                text = "Cordis",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = if (showingSettings) {
-                    "Runtime ports"
-                } else {
-                    "$instanceCount instance${if (instanceCount == 1) "" else "s"}"
-                },
+                text = "$instanceCount instance${if (instanceCount == 1) "" else "s"}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (showingSettings) {
-                IconButton(onClick = onCloseSettings) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            } else {
-                IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
-                }
-                Button(onClick = onAddInstance) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Text("Instance")
-                }
-            }
+        Button(onClick = onAddInstance) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Text("Instance")
         }
     }
 }
@@ -147,9 +150,10 @@ private fun Header(
 @Composable
 private fun InstancePanel(
     instance: CordisInstance,
-    removable: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onOpenConsole: () -> Unit,
+    onOpenSettings: () -> Unit,
     onRemove: () -> Unit,
 ) {
     Card(
@@ -176,27 +180,38 @@ private fun InstancePanel(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "localhost:${instance.port}",
+                        text = instance.consoleUrl,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusChip(instance.status)
-                    IconButton(
-                        onClick = onStart,
-                        enabled = instance.status.canStart,
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
-                    }
-                    IconButton(onClick = onStop) {
-                        Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
-                    }
-                    if (removable) {
-                        IconButton(onClick = onRemove) {
-                            Icon(Icons.Default.Delete, contentDescription = "Remove ${instance.name}")
-                        }
-                    }
+                StatusChip(instance.status)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onOpenConsole) {
+                    Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
+                }
+                IconButton(
+                    onClick = onStart,
+                    enabled = instance.status.canStart,
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
+                }
+                IconButton(onClick = onStop) {
+                    Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
+                }
+                IconButton(onClick = onOpenSettings) {
+                    Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
+                }
+                IconButton(onClick = onRemove) {
+                    Icon(Icons.Default.Delete, contentDescription = "Remove ${instance.name}")
                 }
             }
 
@@ -209,16 +224,21 @@ private fun InstancePanel(
     }
 }
 
+private val CordisInstance.consoleUrl: String
+    get() = "http://127.0.0.1:$port"
+
 private val RuntimeStatus.canStart: Boolean
     get() = this != RuntimeStatus.Starting && this != RuntimeStatus.Running
 
 @Composable
-private fun SettingsPanel(
-    settings: AppSettings,
-    onSaveBasePort: (Int) -> Unit,
+fun InstanceSettingsPanel(
+    instance: CordisInstance,
+    onSave: (name: String, port: Int, dns: String) -> Unit,
 ) {
-    var basePortText by remember(settings.basePort) { mutableStateOf(settings.basePort.toString()) }
-    val parsedPort = basePortText.toIntOrNull()
+    var nameText by remember(instance.id, instance.name) { mutableStateOf(instance.name) }
+    var portText by remember(instance.id, instance.port) { mutableStateOf(instance.port.toString()) }
+    var dnsText by remember(instance.id, instance.dns) { mutableStateOf(instance.dns) }
+    val parsedPort = portText.toIntOrNull()
     val portIsValid = parsedPort != null && parsedPort in 1024..65535
 
     Card(
@@ -232,48 +252,77 @@ private fun SettingsPanel(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
-                text = "Base port",
+                text = "Instance configuration",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(
-                text = "Instances use this port and increment by one in list order.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = nameText,
+                onValueChange = { nameText = it.take(64) },
+                label = { Text("Instance name") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = portText,
+                onValueChange = { portText = it.filter(Char::isDigit).take(5) },
+                label = { Text("Port") },
+                isError = portText.isNotBlank() && !portIsValid,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = dnsText,
+                onValueChange = { dnsText = it.take(64) },
+                label = { Text("DNS") },
+                placeholder = { Text("System default") },
+                singleLine = true,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
             ) {
-                OutlinedTextField(
-                    modifier = Modifier.weight(1f),
-                    value = basePortText,
-                    onValueChange = { basePortText = it.filter(Char::isDigit).take(5) },
-                    label = { Text("Port") },
-                    isError = basePortText.isNotBlank() && !portIsValid,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
                 Button(
-                    onClick = { parsedPort?.let(onSaveBasePort) },
+                    onClick = { parsedPort?.let { onSave(nameText, it, dnsText) } },
                     enabled = portIsValid,
                 ) {
                     Icon(Icons.Default.Save, contentDescription = null)
                     Text("Save")
                 }
             }
-            TextButton(onClick = { basePortText = InstanceRepository.DEFAULT_BASE_PORT.toString() }) {
-                Text("Reset to ${InstanceRepository.DEFAULT_BASE_PORT}")
-            }
         }
     }
 }
 
 @Composable
+private fun DeleteInstanceDialog(
+    instance: CordisInstance,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete ${instance.name}?") },
+        text = { Text("This removes the instance and deletes its files.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
 private fun StatusChip(status: RuntimeStatus) {
     val label = when (status) {
-        RuntimeStatus.MissingBootstrap -> "Bootstrap missing"
+        RuntimeStatus.MissingBootstrap -> "Uninitialized"
         RuntimeStatus.Stopped -> "Stopped"
         RuntimeStatus.Starting -> "Starting"
         RuntimeStatus.Running -> "Running"
@@ -284,23 +333,48 @@ private fun StatusChip(status: RuntimeStatus) {
 
 @Composable
 private fun LogPanel(lines: List<String>) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(220.dp)
-            .background(Color(0xFF101418))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        items(lines.takeLast(80)) { line ->
+    var autoScroll by remember { mutableStateOf(true) }
+    val listState = rememberLazyListState()
+    val visibleLines = lines.takeLast(80)
+
+    LaunchedEffect(autoScroll, visibleLines.size, visibleLines.lastOrNull()) {
+        if (autoScroll && visibleLines.isNotEmpty()) {
+            listState.animateScrollToItem(visibleLines.lastIndex)
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                text = line,
-                color = Color(0xFFE6EDF3),
+                text = "Auto-scroll",
                 style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Switch(checked = autoScroll, onCheckedChange = { autoScroll = it })
+        }
+        SelectionContainer {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .background(Color(0xFF101418))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(visibleLines) { line ->
+                    Text(
+                        text = line,
+                        color = Color(0xFFE6EDF3),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
         }
     }
 }
