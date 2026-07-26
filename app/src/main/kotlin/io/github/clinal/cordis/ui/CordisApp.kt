@@ -183,7 +183,10 @@ private fun InstancePanel(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatusChip(instance.status)
-                    IconButton(onClick = onStart) {
+                    IconButton(
+                        onClick = onStart,
+                        enabled = instance.status.canStart,
+                    ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
                     }
                     IconButton(onClick = onStop) {
@@ -205,6 +208,9 @@ private fun InstancePanel(
         }
     }
 }
+
+private val RuntimeStatus.canStart: Boolean
+    get() = this != RuntimeStatus.Starting && this != RuntimeStatus.Running
 
 @Composable
 private fun SettingsPanel(
