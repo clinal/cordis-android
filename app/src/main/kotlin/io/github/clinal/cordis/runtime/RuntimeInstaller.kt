@@ -29,15 +29,19 @@ class RuntimeInstaller(context: Context) {
         paths.filesDir.mkdirs()
 
         try {
-            if (!paths.proot.canExecute()) {
-                onProgress("Installing runtime bootstrap.")
+            val bundledEnv = readAssetText("bootstrap/env.txt")
+            val installedEnv = paths.envFile.takeIf(File::exists)?.readText()?.trim()
+
+            if (!paths.proot.canExecute() || installedEnv != bundledEnv.trim()) {
+                val action = if (paths.proot.canExecute()) "Updating" else "Installing"
+                onProgress("$action runtime bootstrap.")
                 unpackBootstrap(onProgress)
-                onProgress("Runtime bootstrap installed.")
+                onProgress("Runtime bootstrap ${if (action == "Updating") "updated" else "installed"}.")
             }
 
-            if (!paths.envFile.exists()) {
+            if (!paths.envFile.exists() || installedEnv != bundledEnv.trim()) {
                 onProgress("Writing bootstrap environment.")
-                copyAsset("bootstrap/env.txt", paths.envFile)
+                writeText(paths.envFile, bundledEnv)
             }
 
             paths.tmp.mkdirs()
@@ -233,6 +237,19 @@ class RuntimeInstaller(context: Context) {
         } catch (error: FileNotFoundException) {
             throw BootstrapAssetMissingException(assetPath, error)
         }
+    }
+
+    private fun readAssetText(assetPath: String): String {
+        return try {
+            appContext.assets.open(assetPath).bufferedReader().use { it.readText() }
+        } catch (error: FileNotFoundException) {
+            throw BootstrapAssetMissingException(assetPath, error)
+        }
+    }
+
+    private fun writeText(destination: File, content: String) {
+        destination.parentFile?.mkdirs()
+        destination.writeText(content)
     }
 
     companion object {

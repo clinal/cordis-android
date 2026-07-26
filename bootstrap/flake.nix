@@ -5,12 +5,13 @@
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/6616de389ed55fba6eeba60377fc04732d5a207c";
   inputs.flake-utils.url = "github:numtide/flake-utils/1ed9fb1935d260de5fe1c2f7ee0ebaae17ed2fa1";
   inputs.anillc.url = "github:Anillc/flakes/be4ce4f0a20c2be33cf3d99ed34f20b350c07016";
+  inputs.node-pkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.nix-on-droid = {
     url = "github:Anillc/nix-on-droid/e082472db71e249c00225ed83b2bed6569f72084";
     inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-utils, anillc, nix-on-droid }:
+  outputs = inputs@{ self, nixpkgs, flake-utils, anillc, node-pkgs, nix-on-droid }:
     flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs { inherit system; };
