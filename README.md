@@ -12,8 +12,11 @@ Android host application for running Cordis inside a proot-managed Nix runtime.
 
 ## Initial Milestones
 
-1. Create the Android Compose project skeleton.
-2. Port the proot installer and process supervisor from Koishi Android.
+1. Create the Android Compose project skeleton. Done: app module, Compose
+   console, runtime service, and default instance model are present.
+2. Port the proot installer and process supervisor from Koishi Android. Started:
+   directory preparation, default Cordis config seeding, and command construction
+   are scaffolded; bootstrap extraction and real process packaging are next.
 3. Build a minimal Nix bootstrap containing proot-static, busybox, Node.js,
    certificates, and required shell shims.
 4. Package a default Cordis instance template with `cordis.yml`.
