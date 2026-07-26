@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     env:
       CORDIS_ANDROID_KEYSTORE_BASE64: ${{ secrets.CORDIS_ANDROID_KEYSTORE_BASE64 }}
       CORDIS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CORDIS_ANDROID_KEYSTORE_PASSWORD }}
@@ -28,6 +29,12 @@ jobs:
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Configure Gradle cache
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Free runner disk space
         run: |
@@ -48,7 +55,7 @@ jobs:
           printf '%s' "$CORDIS_ANDROID_KEYSTORE_BASE64" | base64 -d > "$CORDIS_ANDROID_KEYSTORE_FILE"
 
       - name: Build debug APK
-        run: nix develop --command gradle -PcordisBootstrapAssetsDir=result clean assembleDebug
+        run: nix develop --command gradle -PcordisBootstrapAssetsDir=result --build-cache clean assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
