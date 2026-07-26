@@ -3,33 +3,31 @@ package io.github.clinal.cordis.runtime
 class ProotCommandBuilder(private val paths: RuntimePaths) {
     fun cordisCommand(instanceId: String): List<String> {
         val instanceHome = paths.instanceHome(instanceId)
+        val envRoot = paths.envFile.readText().trim()
         return listOf(
             paths.proot.absolutePath,
-            "--link2symlink",
-            "-0",
             "-r",
-            paths.root.absolutePath,
-            "-b",
-            "${paths.nixStore.absolutePath}:/nix",
-            "-b",
-            "${paths.home.absolutePath}:/home",
+            "${paths.root.absolutePath}$envRoot",
             "-b",
             "${paths.tmp.absolutePath}:/tmp",
             "-b",
             "${paths.shm.absolutePath}:/dev/shm",
             "-b",
+            "${paths.nixStore.absolutePath}:/nix",
+            "-b",
+            "${paths.root.absolutePath}:/data",
+            "-b",
+            "${instanceHome.absolutePath}:/home",
+            "-b",
             "/proc:/proc",
             "-b",
             "/dev:/dev",
-            "-w",
-            instanceHome.absolutePath,
-            "/usr/bin/env",
-            "HOME=${instanceHome.absolutePath}",
-            "TMPDIR=/tmp",
-            "PROOT_TMP_DIR=${paths.tmp.absolutePath}",
-            "node",
-            "node_modules/cordis/bin.js",
-            "run",
+            "--sysvipc",
+            "--link2symlink",
+            "/bin/sh",
+            "/bin/login",
+            "-c",
+            "cd /home && PROOT_TMP_DIR=/tmp node node_modules/cordis/bin.js run",
         )
     }
 }

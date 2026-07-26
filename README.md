@@ -20,7 +20,9 @@ Android host application for running Cordis inside a proot-managed Nix runtime.
    directory preparation, Cordis boilerplate seeding, and command construction
    are scaffolded; bootstrap extraction and real process packaging are next.
 3. Build a minimal Nix bootstrap containing proot-static, busybox, Node.js,
-   certificates, and required shell shims.
+   certificates, and required shell shims. Done: the bootstrap flake follows
+   Koishi Android's pinned nix-on-droid/proot packaging path and emits
+   `bootstrap.zip` plus `env.txt`.
 4. Package a default Cordis instance template from
    `cordiverse/boilerplate@v0.6.0`:
    `boilerplate-v0.6.0-linux-arm64-node24.zip`

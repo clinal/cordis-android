@@ -37,6 +37,7 @@ class RuntimeSupervisor(
             val command = commandBuilder.cordisCommand(instanceId)
             val process = ProcessBuilder(command)
                 .redirectErrorStream(true)
+                .also { builder -> builder.environment()["PROOT_TMP_DIR"] = RuntimePaths(appContext).tmp.absolutePath }
                 .start()
             processes[instanceId] = process
 
