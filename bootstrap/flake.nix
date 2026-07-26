@@ -31,10 +31,9 @@
         pkgs = pkgs // anillc.packages.${system} // nix-on-droid.packages.${system};
       };
       packageAssets = runtime: pkgs.runCommand "cordis-android-bootstrap-assets" { } ''
-        mkdir -p $out/assets/bootstrap $out/template
+        mkdir -p $out/assets/bootstrap
         cp ${runtime}/bootstrap.zip $out/assets/bootstrap/bootstrap.zip
         cp ${runtime}/env.txt $out/assets/bootstrap/env.txt
-        cp ${../app/src/main/assets/bootstrap/default-cordis.yml} $out/template/cordis.yml
         cp ${boilerplate} $out/assets/bootstrap/boilerplate.zip
         cat > $out/assets/bootstrap/boilerplate.txt <<EOF
         source=https://github.com/cordiverse/boilerplate/releases/download/${boilerplateVersion}/${boilerplateAsset}
