@@ -18,7 +18,10 @@ class CordisApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         applicationScope.launch {
-            RuntimeInstaller(this@CordisApplication).prepareBootstrap()
+            runCatching {
+                RuntimeInstaller(this@CordisApplication).prepareBootstrap()
+            }
+            runtimeSupervisor.restoreAutoStartedInstances()
         }
     }
 }
