@@ -29,6 +29,7 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
             "PROOT_TMP_DIR=${paths.tmp.absolutePath}",
             "node",
             "node_modules/cordis/bin.js",
+            "run",
         )
     }
 }
