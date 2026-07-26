@@ -30,14 +30,6 @@ class RuntimeInstaller(context: Context) {
 
     fun isBootstrapInstalled(): Boolean = paths.proot.canExecute() && paths.envFile.exists()
 
-    fun configureDns(dns: String, onProgress: (String) -> Unit = {}) {
-        val nameserver = dns.trim()
-        if (nameserver.isBlank()) return
-
-        writeText(paths.resolvConf, "nameserver $nameserver\n")
-        onProgress("Configured runtime DNS $nameserver.")
-    }
-
     fun needsBootstrapInstall(): Boolean {
         return try {
             val bundledEnv = readAssetText("bootstrap/env.txt").trim()
