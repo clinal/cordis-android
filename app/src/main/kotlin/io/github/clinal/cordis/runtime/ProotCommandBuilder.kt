@@ -28,8 +28,6 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
             "-b",
             "${paths.shm.absolutePath}:/dev/shm",
             "-b",
-            "${paths.resolvConf.absolutePath}:/etc/resolv.conf",
-            "-b",
             "${paths.nixStore.absolutePath}:/nix",
             "-b",
             "${paths.root.absolutePath}:/data",
