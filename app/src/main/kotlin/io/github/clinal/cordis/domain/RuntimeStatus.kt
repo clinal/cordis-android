@@ -5,5 +5,6 @@ enum class RuntimeStatus {
     Stopped,
     Starting,
     Running,
+    Stopping,
     Failed,
 }

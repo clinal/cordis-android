@@ -228,7 +228,7 @@ private val CordisInstance.consoleUrl: String
     get() = "http://127.0.0.1:$port"
 
 private val RuntimeStatus.canStart: Boolean
-    get() = this != RuntimeStatus.Starting && this != RuntimeStatus.Running
+    get() = this != RuntimeStatus.Starting && this != RuntimeStatus.Running && this != RuntimeStatus.Stopping
 
 @Composable
 fun InstanceSettingsPanel(
@@ -326,6 +326,7 @@ private fun StatusChip(status: RuntimeStatus) {
         RuntimeStatus.Stopped -> "Stopped"
         RuntimeStatus.Starting -> "Starting"
         RuntimeStatus.Running -> "Running"
+        RuntimeStatus.Stopping -> "Stopping"
         RuntimeStatus.Failed -> "Failed"
     }
     AssistChip(onClick = {}, label = { Text(label) })
