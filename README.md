@@ -52,5 +52,5 @@ nix develop --command gradle \
   assembleDebug
 ```
 
-Without `cordisBootstrapAssetsDir`, the app falls back to a minimal `cordis.yml`
-seed so development builds stay small.
+Without `cordisBootstrapAssetsDir`, the app skips bundled runtime assets so
+development builds stay small.
