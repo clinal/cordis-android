@@ -12,6 +12,7 @@ class RuntimePaths(context: Context) {
     val shm: File = root.resolve("shm")
     val proot: File = root.resolve("proot-static")
     val envFile: File = context.filesDir.resolve("env.txt")
+    val resolvConf: File = context.filesDir.resolve("resolv.conf")
 
     fun instanceHome(instanceId: String): File = home.resolve("instances").resolve(instanceId)
 }
