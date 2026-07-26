@@ -16,7 +16,7 @@ class InstanceRepository(context: Context) {
     private val mutableInstances = MutableStateFlow(loadInstances())
     val instances: StateFlow<List<CordisInstance>> = mutableInstances
 
-    fun addInstance(): CordisInstance {
+    fun addInstance() {
         val nextIndex = nextInstanceIndex()
         val id = instanceId(nextIndex)
         val currentInstances = mutableInstances.value
@@ -26,7 +26,7 @@ class InstanceRepository(context: Context) {
             port = nextAvailablePort(currentInstances),
             dns = "",
             status = initialStatus(),
-            lastLogLines = listOf("Preparing Cordis runtime."),
+            lastLogLines = listOf("Press Start to prepare the Cordis runtime."),
         )
 
         preferences.edit().putStringSet(KEY_INSTANCE_IDS, currentIds() + id).apply()
@@ -35,7 +35,6 @@ class InstanceRepository(context: Context) {
         mutableInstances.update { instances ->
             instances + instance
         }
-        return instance
     }
 
     fun removeInstance(id: String) {

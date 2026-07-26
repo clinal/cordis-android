@@ -15,7 +15,6 @@ class RuntimeService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val instanceId = intent?.getStringExtra(EXTRA_INSTANCE_ID) ?: InstanceRepository.DEFAULT_INSTANCE_ID
         when (intent?.action) {
-            ACTION_PREPARE -> supervisor.prepare(instanceId)
             ACTION_START -> supervisor.start(instanceId)
             ACTION_STOP -> supervisor.stop(instanceId)
             ACTION_REMOVE -> supervisor.remove(instanceId)
@@ -24,7 +23,6 @@ class RuntimeService : Service() {
     }
 
     companion object {
-        const val ACTION_PREPARE = "io.github.clinal.cordis.runtime.PREPARE"
         const val ACTION_START = "io.github.clinal.cordis.runtime.START"
         const val ACTION_STOP = "io.github.clinal.cordis.runtime.STOP"
         const val ACTION_REMOVE = "io.github.clinal.cordis.runtime.REMOVE"

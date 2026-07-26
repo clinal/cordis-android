@@ -30,38 +30,6 @@ class RuntimeSupervisor(
     private val deletingInstances = ConcurrentHashMap.newKeySet<String>()
     private val startJobs = ConcurrentHashMap<String, Job>()
 
-    fun prepare(instanceId: String) {
-        if (deletingInstances.contains(instanceId)) return
-        scope.launch {
-            val instance = instanceRepository.instance(instanceId)
-            if (instance == null) {
-                instanceRepository.updateStatus(instanceId, RuntimeStatus.Failed, "Instance configuration was not found.")
-                return@launch
-            }
-
-            try {
-                instanceRepository.updateStatus(instanceId, RuntimeStatus.Starting, "Preparing Cordis runtime.")
-                installer.prepare(instanceId, instance.port) { line -> instanceRepository.appendLog(instanceId, line) }
-                if (!installer.isBootstrapInstalled()) {
-                    instanceRepository.updateStatus(
-                        instanceId,
-                        RuntimeStatus.MissingBootstrap,
-                        "Runtime bootstrap is not installed yet.",
-                    )
-                    return@launch
-                }
-                instanceRepository.updateStatus(instanceId, RuntimeStatus.Stopped, "Runtime prepared.")
-            } catch (error: Exception) {
-                Log.e(TAG, "Failed to prepare runtime for instance: $instanceId", error)
-                instanceRepository.updateStatus(
-                    instanceId,
-                    RuntimeStatus.Failed,
-                    "Runtime prepare failed: ${error.message ?: error.javaClass.simpleName}.",
-                )
-            }
-        }
-    }
-
     fun start(instanceId: String) {
         if (deletingInstances.contains(instanceId)) return
         if (!activeStarts.add(instanceId)) return
