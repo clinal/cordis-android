@@ -24,9 +24,9 @@ Android host application for running Cordis inside a proot-managed Nix runtime.
    Koishi Android's pinned nix-on-droid/proot packaging path and emits
    `bootstrap.zip` plus `env.txt`.
 4. Package a default Cordis instance template from
-   `cordiverse/boilerplate@v0.6.0`:
-   `boilerplate-v0.6.0-linux-arm64-node24.zip`
-   (`sha256:e415d4fa689e1792be1ccf59e6c6ce32f88b9e7f05ab2b3c4db2638de98c8b74`).
+   `cordiverse/boilerplate@v0.6.1`:
+   `boilerplate-v0.6.1-linux-arm64-node24.zip`
+   (`sha256:4de3af9160043f14cc2fa5ccb5ffdbbfdd287b505a6300dcc44602730381c572`).
 5. Add Compose screens for instances, runtime logs, settings, and import/export.
 6. Validate on Android 10, 11, 14, and 15 devices or emulators.
 
@@ -34,7 +34,7 @@ Android host application for running Cordis inside a proot-managed Nix runtime.
 
 - https://github.com/koishijs/koishi-android
 - https://github.com/cordiverse/cordis
-- https://github.com/cordiverse/boilerplate/releases/tag/v0.6.0
+- https://github.com/cordiverse/boilerplate/releases/tag/v0.6.1
 
 ## Bootstrap Assets
 
