@@ -64,6 +64,18 @@ class InstanceRepository(context: Context) {
 
     fun instance(id: String): CordisInstance? = mutableInstances.value.firstOrNull { it.id == id }
 
+    fun autoStartInstanceIds(): List<String> {
+        return mutableInstances.value
+            .filter { instance -> preferences.getBoolean(instanceKey(instance.id, KEY_AUTO_START), false) }
+            .map(CordisInstance::id)
+    }
+
+    fun setAutoStart(id: String, enabled: Boolean) {
+        preferences.edit()
+            .putBoolean(instanceKey(id, KEY_AUTO_START), enabled)
+            .apply()
+    }
+
     fun updateStatus(id: String, status: RuntimeStatus, logLine: String? = null) {
         mutableInstances.update { instances ->
             instances.map { instance ->
@@ -150,6 +162,7 @@ class InstanceRepository(context: Context) {
             .remove(instanceKey(id, KEY_NAME))
             .remove(instanceKey(id, KEY_PORT))
             .remove(instanceKey(id, KEY_DNS))
+            .remove(instanceKey(id, KEY_AUTO_START))
             .apply()
     }
 
@@ -168,6 +181,7 @@ class InstanceRepository(context: Context) {
         private const val KEY_NAME = "name"
         private const val KEY_PORT = "port"
         private const val KEY_DNS = "dns"
+        private const val KEY_AUTO_START = "auto_start"
         private const val INSTANCE_ID_PREFIX = "instance-"
         private const val MIN_PORT = 1024
         private const val MAX_PORT = 65535

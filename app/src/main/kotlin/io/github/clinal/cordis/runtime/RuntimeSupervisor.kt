@@ -30,14 +30,20 @@ class RuntimeSupervisor(
     private val deletingInstances = ConcurrentHashMap.newKeySet<String>()
     private val startJobs = ConcurrentHashMap<String, Job>()
 
+    fun restoreAutoStartedInstances() {
+        instanceRepository.autoStartInstanceIds().forEach(::start)
+    }
+
     fun start(instanceId: String) {
         if (deletingInstances.contains(instanceId)) return
         if (!activeStarts.add(instanceId)) return
+        instanceRepository.setAutoStart(instanceId, true)
 
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 val instance = instanceRepository.instance(instanceId)
                 if (instance == null) {
+                    instanceRepository.setAutoStart(instanceId, false)
                     instanceRepository.updateStatus(instanceId, RuntimeStatus.Failed, "Instance configuration was not found.")
                     return@launch
                 }
@@ -48,6 +54,7 @@ class RuntimeSupervisor(
                     return@launch
                 }
                 if (!installer.isBootstrapInstalled()) {
+                    instanceRepository.setAutoStart(instanceId, false)
                     instanceRepository.updateStatus(
                         instanceId,
                         RuntimeStatus.MissingBootstrap,
@@ -84,6 +91,7 @@ class RuntimeSupervisor(
                 val exitCode = process.waitFor()
                 val stoppedByRequest = stoppingInstances.remove(instanceId)
                 val status = if (stoppedByRequest || exitCode == 0) RuntimeStatus.Stopped else RuntimeStatus.Failed
+                instanceRepository.setAutoStart(instanceId, false)
                 val logLine = if (stoppedByRequest) {
                     "Runtime stopped."
                 } else {
@@ -92,6 +100,7 @@ class RuntimeSupervisor(
                 instanceRepository.updateStatus(instanceId, status, logLine)
             } catch (error: Exception) {
                 Log.e(TAG, "Failed to start runtime for instance: $instanceId", error)
+                instanceRepository.setAutoStart(instanceId, false)
                 instanceRepository.updateStatus(
                     instanceId,
                     RuntimeStatus.Failed,
@@ -111,12 +120,14 @@ class RuntimeSupervisor(
     }
 
     fun stop(instanceId: String) {
+        instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             stopProcess(instanceId)
         }
     }
 
     fun remove(instanceId: String) {
+        instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             try {
                 deletingInstances.add(instanceId)
