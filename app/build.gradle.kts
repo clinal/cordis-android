@@ -39,6 +39,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    val bootstrapAssetsDir = providers.gradleProperty("cordisBootstrapAssetsDir")
+    sourceSets {
+        named("main") {
+            bootstrapAssetsDir.orNull?.let { assets.srcDir(rootProject.file("$it/assets")) }
+        }
+    }
 }
 
 dependencies {
