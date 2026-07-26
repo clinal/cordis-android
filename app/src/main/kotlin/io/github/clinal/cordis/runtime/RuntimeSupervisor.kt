@@ -62,6 +62,8 @@ class RuntimeSupervisor(
                     )
                     return@launch
                 }
+                val dns = instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }
+                installer.configureDns(dns) { line -> instanceRepository.appendLog(instanceId, line) }
 
                 instanceRepository.appendLog(instanceId, "Starting Cordis with yarn start.")
                 val command = commandBuilder.cordisCommand(instanceId)
@@ -69,7 +71,7 @@ class RuntimeSupervisor(
                     .redirectErrorStream(true)
                     .also { builder ->
                         builder.environment()["PROOT_TMP_DIR"] = RuntimePaths(appContext).tmp.absolutePath
-                        builder.environment()["CORDIS_DNS"] = instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }
+                        builder.environment()["CORDIS_DNS"] = dns
                     }
                     .start()
                 processes[instanceId] = process
