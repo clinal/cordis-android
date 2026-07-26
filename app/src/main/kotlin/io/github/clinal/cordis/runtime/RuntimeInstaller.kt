@@ -69,15 +69,8 @@ class RuntimeInstaller(context: Context) {
 
     private fun unpackBootstrap(onProgress: (String) -> Unit) {
         val staging = paths.filesDir.resolve("data-staging")
-        val backup = paths.filesDir.resolve("data-backup")
-        if (!paths.root.exists() && backup.exists() && !backup.renameTo(paths.root)) {
-            error("Cannot restore bootstrap backup directory.")
-        }
         if (staging.exists()) {
             staging.deleteRecursively()
-        }
-        if (backup.exists()) {
-            backup.deleteRecursively()
         }
         if (!staging.mkdirs()) {
             error("Cannot create bootstrap staging directory: ${staging.absolutePath}")
@@ -93,31 +86,19 @@ class RuntimeInstaller(context: Context) {
                 restoreMetadata = true,
                 onProgress = onProgress,
             )
-            moveBootstrapIntoPlace(staging, backup)
+            moveBootstrapIntoPlace(staging)
         } catch (error: Throwable) {
             staging.deleteRecursively()
-            if (!paths.root.exists() && backup.exists()) {
-                backup.renameTo(paths.root)
-            }
             throw error
-        } finally {
-            backup.deleteRecursively()
         }
     }
 
-    private fun moveBootstrapIntoPlace(staging: File, backup: File) {
-        if (paths.root.exists() && !paths.root.renameTo(backup)) {
-            error("Cannot move existing bootstrap directory aside.")
+    private fun moveBootstrapIntoPlace(staging: File) {
+        if (paths.root.exists() && !paths.root.deleteRecursively()) {
+            error("Cannot remove existing bootstrap directory.")
         }
-        try {
-            if (!staging.renameTo(paths.root)) {
-                error("Cannot move bootstrap staging directory into place.")
-            }
-        } catch (error: Throwable) {
-            if (!paths.root.exists() && backup.exists()) {
-                backup.renameTo(paths.root)
-            }
-            throw error
+        if (!staging.renameTo(paths.root)) {
+            error("Cannot move bootstrap staging directory into place.")
         }
     }
 
