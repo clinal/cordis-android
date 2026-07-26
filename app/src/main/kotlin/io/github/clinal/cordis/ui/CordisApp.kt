@@ -40,6 +40,7 @@ import io.github.clinal.cordis.domain.RuntimeStatus
 @Composable
 fun CordisApp(viewModel: CordisViewModel = viewModel()) {
     val instances by viewModel.instances.collectAsState()
+    val defaultInstance = instances.firstOrNull { it.id == "default" }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -68,7 +69,10 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Button(onClick = { viewModel.start() }) {
+                Button(
+                    onClick = { viewModel.start() },
+                    enabled = defaultInstance?.status?.canStart == true,
+                ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Text("Start")
                 }
@@ -124,7 +128,10 @@ private fun InstancePanel(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatusChip(instance.status)
-                    IconButton(onClick = onStart) {
+                    IconButton(
+                        onClick = onStart,
+                        enabled = instance.status.canStart,
+                    ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
                     }
                     IconButton(onClick = onStop) {
@@ -141,6 +148,9 @@ private fun InstancePanel(
         }
     }
 }
+
+private val RuntimeStatus.canStart: Boolean
+    get() = this != RuntimeStatus.Starting && this != RuntimeStatus.Running
 
 @Composable
 private fun StatusChip(status: RuntimeStatus) {
