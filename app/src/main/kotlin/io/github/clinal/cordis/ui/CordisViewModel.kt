@@ -10,6 +10,7 @@ import io.github.clinal.cordis.runtime.RuntimeService
 class CordisViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as CordisApplication
     val instances = app.instanceRepository.instances
+    val bootstrapInstallState = app.bootstrapInstallState
 
     fun addInstance() {
         app.instanceRepository.addInstance()

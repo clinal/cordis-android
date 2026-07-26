@@ -57,7 +57,7 @@ class RuntimeSupervisor(
                     instanceRepository.setAutoStart(instanceId, false)
                     instanceRepository.updateStatus(
                         instanceId,
-                        RuntimeStatus.MissingBootstrap,
+                        RuntimeStatus.Failed,
                         "Runtime bootstrap is not installed yet.",
                     )
                     return@launch

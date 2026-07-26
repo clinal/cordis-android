@@ -104,8 +104,7 @@ class InstanceRepository(context: Context) {
     }
 
     private fun initialStatus(): RuntimeStatus {
-        val bootstrap = appContext.filesDir.resolve("data/proot-static")
-        return if (bootstrap.canExecute()) RuntimeStatus.Stopped else RuntimeStatus.MissingBootstrap
+        return RuntimeStatus.Stopped
     }
 
     private fun loadInstances(): List<CordisInstance> {
