@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -71,6 +72,7 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                 showingSettings = showingSettings,
                 instanceCount = instances.size,
                 onAddInstance = viewModel::addInstance,
+                onOpenTerminal = viewModel::openGlobalTerminal,
                 onOpenSettings = { showingSettings = true },
                 onCloseSettings = { showingSettings = false },
             )
@@ -88,6 +90,7 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                             removable = instance.id != InstanceRepository.DEFAULT_INSTANCE_ID,
                             onStart = { viewModel.start(instance.id) },
                             onStop = { viewModel.stop(instance.id) },
+                            onOpenTerminal = { viewModel.openInstanceTerminal(instance.id) },
                             onRemove = { viewModel.removeInstance(instance.id) },
                         )
                     }
@@ -102,6 +105,7 @@ private fun Header(
     showingSettings: Boolean,
     instanceCount: Int,
     onAddInstance: () -> Unit,
+    onOpenTerminal: () -> Unit,
     onOpenSettings: () -> Unit,
     onCloseSettings: () -> Unit,
 ) {
@@ -132,6 +136,9 @@ private fun Header(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             } else {
+                IconButton(onClick = onOpenTerminal) {
+                    Icon(Icons.Default.Terminal, contentDescription = "Global terminal")
+                }
                 IconButton(onClick = onOpenSettings) {
                     Icon(Icons.Default.Settings, contentDescription = "Settings")
                 }
@@ -150,6 +157,7 @@ private fun InstancePanel(
     removable: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onOpenTerminal: () -> Unit,
     onRemove: () -> Unit,
 ) {
     Card(
@@ -188,6 +196,9 @@ private fun InstancePanel(
                         enabled = instance.status.canStart,
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
+                    }
+                    IconButton(onClick = onOpenTerminal) {
+                        Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
                     }
                     IconButton(onClick = onStop) {
                         Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
