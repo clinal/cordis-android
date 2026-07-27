@@ -17,7 +17,7 @@ buildEnv {
     certs
     busybox
     zip
-    aarch64-node-pkgs.nodejs-slim_24
+    aarch64-node-pkgs.nodejs-slim_26
   ] ++ (lib.optionals full [
     fonts
     chromium
