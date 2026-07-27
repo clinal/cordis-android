@@ -33,6 +33,7 @@ import kotlinx.coroutines.withContext
 class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessionClient {
     private lateinit var terminalView: TerminalView
     private var terminalSession: TerminalSession? = null
+    private var fontSize = DEFAULT_FONT_SIZE
     private var lastBackPressedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,7 +126,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         terminalView = TerminalView(this, null).apply {
             setBackgroundColor(Color.BLACK)
             setTerminalViewClient(this@TerminalActivity)
-            setTextSize(18)
+            setTextSize(fontSize)
             isFocusable = true
             isFocusableInTouchMode = true
         }
@@ -209,7 +210,20 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
 
     override fun getTerminalCursorStyle(): Int? = null
 
-    override fun onScale(scale: Float): Float = scale
+    override fun onScale(scale: Float): Float {
+        if (scale in SCALE_DOWN_THRESHOLD..SCALE_UP_THRESHOLD) return scale
+
+        val nextFontSize = if (scale > 1f) {
+            (fontSize + FONT_SIZE_STEP).coerceAtMost(MAX_FONT_SIZE)
+        } else {
+            (fontSize - FONT_SIZE_STEP).coerceAtLeast(MIN_FONT_SIZE)
+        }
+        if (nextFontSize != fontSize) {
+            fontSize = nextFontSize
+            terminalView.setTextSize(fontSize)
+        }
+        return 1f
+    }
 
     override fun onSingleTapUp(e: MotionEvent) {
         focusTerminal()
@@ -295,6 +309,12 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         private const val SYSTEM_SHELL = "/system/bin/sh"
         private const val TRANSCRIPT_ROWS = 2000
         private const val BACK_EXIT_INTERVAL_MILLIS = 2000L
+        private const val DEFAULT_FONT_SIZE = 18
+        private const val MIN_FONT_SIZE = 10
+        private const val MAX_FONT_SIZE = 32
+        private const val FONT_SIZE_STEP = 1
+        private const val SCALE_DOWN_THRESHOLD = 0.9f
+        private const val SCALE_UP_THRESHOLD = 1.1f
 
         fun globalIntent(context: Context): Intent {
             return Intent(context, TerminalActivity::class.java)
