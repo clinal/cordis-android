@@ -6,13 +6,17 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.lifecycle.lifecycleScope
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -29,10 +33,20 @@ import kotlinx.coroutines.withContext
 class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessionClient {
     private lateinit var terminalView: TerminalView
     private var terminalSession: TerminalSession? = null
+    private var lastBackPressedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = if (intent.mode == Mode.INSTANCE) "Cordis terminal" else "Global terminal"
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    handleBackPressed()
+                }
+            },
+        )
         showStatus("Preparing terminal.")
 
         lifecycleScope.launch {
@@ -111,7 +125,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         terminalView = TerminalView(this, null).apply {
             setBackgroundColor(Color.BLACK)
             setTerminalViewClient(this@TerminalActivity)
-            setTextSize(14)
+            setTextSize(18)
             isFocusable = true
             isFocusableInTouchMode = true
         }
@@ -125,7 +139,26 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         )
         setContentView(terminalView)
         terminalView.attachSession(terminalSession)
+        focusTerminal()
+    }
+
+    private fun focusTerminal() {
         terminalView.requestFocus()
+        terminalView.post {
+            val inputMethodManager = getSystemService(InputMethodManager::class.java)
+            inputMethodManager.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun handleBackPressed() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastBackPressedAt <= BACK_EXIT_INTERVAL_MILLIS) {
+            finish()
+            return
+        }
+
+        lastBackPressedAt = now
+        Toast.makeText(this, "Press back again to close terminal.", Toast.LENGTH_SHORT).show()
     }
 
     private fun showStatus(message: String) {
@@ -179,7 +212,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     override fun onScale(scale: Float): Float = scale
 
     override fun onSingleTapUp(e: MotionEvent) {
-        terminalView.requestFocus()
+        focusTerminal()
     }
 
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
@@ -261,6 +294,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         private const val MODE_INSTANCE = "instance"
         private const val SYSTEM_SHELL = "/system/bin/sh"
         private const val TRANSCRIPT_ROWS = 2000
+        private const val BACK_EXIT_INTERVAL_MILLIS = 2000L
 
         fun globalIntent(context: Context): Intent {
             return Intent(context, TerminalActivity::class.java)
