@@ -9,8 +9,10 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
                 trap : SIGINT
                 echo __PID__: ${'$'}${'$'}
                 cd /home && PROOT_TMP_DIR=/tmp node .yarn/releases/yarn-4.14.1.cjs start
-                echo __STATUS__: ${'$'}?
+                status=${'$'}?
+                echo __STATUS__: ${'$'}status
                 echo -e '\n[Process exited.]\n\n'
+                exit ${'$'}status
                 CORDIS_EOF
             """.trimIndent(),
         )
