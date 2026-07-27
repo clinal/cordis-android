@@ -189,27 +189,30 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
             isHorizontalScrollBarEnabled = false
             addView(
                 LinearLayout(context).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(6, 6, 6, 6)
-                    controlButton = addExtraKey("CTRL") { toggleControlKey() }
-                    altButton = addExtraKey("ALT") { toggleAltKey() }
-                    addExtraKey("ESC") { sendText("\u001B") }
-                    addExtraKey("TAB") { sendText("\t") }
-                    addExtraKey("-") { sendText("-") }
-                    addExtraKey("/") { sendText("/") }
-                    addExtraKey("|") { sendText("|") }
-                    addExtraKey("HOME") { sendKeyCode(KeyEvent.KEYCODE_MOVE_HOME) }
-                    addExtraKey("UP") { sendKeyCode(KeyEvent.KEYCODE_DPAD_UP) }
-                    addExtraKey("END") { sendKeyCode(KeyEvent.KEYCODE_MOVE_END) }
-                    addExtraKey("PGUP") { sendKeyCode(KeyEvent.KEYCODE_PAGE_UP) }
-                    addExtraKey("LEFT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_LEFT) }
-                    addExtraKey("DOWN") { sendKeyCode(KeyEvent.KEYCODE_DPAD_DOWN) }
-                    addExtraKey("RIGHT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_RIGHT) }
-                    addExtraKey("PGDN") { sendKeyCode(KeyEvent.KEYCODE_PAGE_DOWN) }
-                    addExtraKey("BKSP") { sendKeyCode(KeyEvent.KEYCODE_DEL) }
-                    addExtraKey("ENTER") { sendText("\r") }
-                    addExtraKey("KBD") { focusTerminal() }
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(8, 8, 8, 8)
+                    addExtraKeysRow {
+                        controlButton = addExtraKey("CTRL") { toggleControlKey() }
+                        altButton = addExtraKey("ALT") { toggleAltKey() }
+                        addExtraKey("ESC") { sendText("\u001B") }
+                        addExtraKey("TAB") { sendText("\t") }
+                        addExtraKey("-") { sendText("-") }
+                        addExtraKey("/") { sendText("/") }
+                        addExtraKey("|") { sendText("|") }
+                        addExtraKey("BKSP") { sendKeyCode(KeyEvent.KEYCODE_DEL) }
+                        addExtraKey("KBD") { focusTerminal() }
+                    }
+                    addExtraKeysRow {
+                        addExtraKey("HOME") { sendKeyCode(KeyEvent.KEYCODE_MOVE_HOME) }
+                        addExtraKey("UP") { sendKeyCode(KeyEvent.KEYCODE_DPAD_UP) }
+                        addExtraKey("END") { sendKeyCode(KeyEvent.KEYCODE_MOVE_END) }
+                        addExtraKey("PGUP") { sendKeyCode(KeyEvent.KEYCODE_PAGE_UP) }
+                        addExtraKey("LEFT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_LEFT) }
+                        addExtraKey("DOWN") { sendKeyCode(KeyEvent.KEYCODE_DPAD_DOWN) }
+                        addExtraKey("RIGHT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_RIGHT) }
+                        addExtraKey("PGDN") { sendKeyCode(KeyEvent.KEYCODE_PAGE_DOWN) }
+                        addExtraKey("ENTER") { sendText("\r") }
+                    }
                 },
                 ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -219,17 +222,33 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         }
     }
 
+    private fun LinearLayout.addExtraKeysRow(content: LinearLayout.() -> Unit) {
+        addView(
+            LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                content()
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = EXTRA_KEYS_ROW_GAP
+            },
+        )
+    }
+
     private fun LinearLayout.addExtraKey(label: String, onClick: () -> Unit): Button {
         val button = Button(context).apply {
             text = label
-            textSize = 12f
+            textSize = EXTRA_KEYS_TEXT_SIZE
             setTextColor(EXTRA_KEYS_TEXT_COLOR)
             setBackgroundColor(EXTRA_KEYS_BUTTON_BACKGROUND)
             minWidth = 0
             minHeight = 0
             minimumWidth = 0
             minimumHeight = 0
-            setPadding(18, 8, 18, 8)
+            setPadding(22, 10, 22, 10)
             setOnClickListener {
                 onClick()
                 focusTerminal()
@@ -238,10 +257,10 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         addView(
             button,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+                EXTRA_KEYS_BUTTON_MIN_WIDTH,
+                EXTRA_KEYS_BUTTON_HEIGHT,
             ).apply {
-                marginEnd = 6
+                marginEnd = EXTRA_KEYS_BUTTON_GAP
             },
         )
         return button
@@ -490,7 +509,12 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         private const val EXTRA_KEYS_ACTIVE_BACKGROUND = 0xFF3D6A9F.toInt()
         private const val EXTRA_KEYS_TEXT_COLOR = 0xFFE8EEF5.toInt()
         private const val EXTRA_KEYS_ACTIVE_TEXT_COLOR = 0xFFFFFFFF.toInt()
-        private const val DEFAULT_FONT_SIZE = 18
+        private const val EXTRA_KEYS_TEXT_SIZE = 14f
+        private const val EXTRA_KEYS_BUTTON_MIN_WIDTH = 96
+        private const val EXTRA_KEYS_BUTTON_HEIGHT = 58
+        private const val EXTRA_KEYS_BUTTON_GAP = 8
+        private const val EXTRA_KEYS_ROW_GAP = 6
+        private const val DEFAULT_FONT_SIZE = 20
         private const val MIN_FONT_SIZE = 10
         private const val MAX_FONT_SIZE = 32
         private const val FONT_SIZE_STEP = 1
