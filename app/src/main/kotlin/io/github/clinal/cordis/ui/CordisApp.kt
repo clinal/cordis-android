@@ -1,7 +1,9 @@
 package io.github.clinal.cordis.ui
 
 import android.content.Intent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +19,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
@@ -171,6 +172,7 @@ private fun Header(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun InstancePanel(
     instance: CordisInstance,
     actionsEnabled: Boolean,
@@ -184,6 +186,12 @@ private fun InstancePanel(
     var autoScroll by remember(instance.id) { mutableStateOf(true) }
 
     Card(
+        modifier = Modifier.combinedClickable(
+            enabled = actionsEnabled,
+            onClick = {},
+            onLongClick = onRemove,
+            onLongClickLabel = "Remove ${instance.name}",
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -257,9 +265,6 @@ private fun InstancePanel(
                 }
                 IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
                     Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
-                }
-                IconButton(onClick = onRemove, enabled = actionsEnabled) {
-                    Icon(Icons.Default.Delete, contentDescription = "Remove ${instance.name}")
                 }
             }
 
