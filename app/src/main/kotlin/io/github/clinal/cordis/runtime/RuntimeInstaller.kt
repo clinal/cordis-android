@@ -18,7 +18,6 @@ class RuntimeInstaller(context: Context) {
 
         val instanceHome = paths.instanceHome(instanceId)
         seedInstanceTemplate(instanceHome, onProgress)
-        ensureForegroundCordisConfig(instanceHome, onProgress)
         ensureAppPortConfig(instanceHome, port, onProgress)
     }
 
@@ -129,21 +128,6 @@ class RuntimeInstaller(context: Context) {
             true
         } catch (_: FileNotFoundException) {
             false
-        }
-    }
-
-    private fun ensureForegroundCordisConfig(instanceHome: File, onProgress: (String) -> Unit) {
-        val config = instanceHome.resolve("cordis.yml")
-        if (!config.exists()) return
-
-        val content = config.readText()
-        val foreground = content.replace(
-            oldValue = "daemon:\n      enabled: true",
-            newValue = "daemon:\n      enabled: false",
-        )
-        if (foreground != content) {
-            config.writeText(foreground)
-            onProgress("Configured Cordis to run in the foreground.")
         }
     }
 
