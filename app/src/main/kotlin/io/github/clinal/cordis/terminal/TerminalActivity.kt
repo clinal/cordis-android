@@ -15,7 +15,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -179,46 +178,38 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
                     1f,
                 ),
             )
-            addView(createExtraKeysView())
+            addView(
+                createExtraKeysView(),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    EXTRA_KEYS_ROW_HEIGHT.dp() * EXTRA_KEYS_ROW_COUNT,
+                ),
+            )
         }
     }
 
-    private fun createExtraKeysView(): HorizontalScrollView {
-        return HorizontalScrollView(this).apply {
+    private fun createExtraKeysView(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setBackgroundColor(EXTRA_KEYS_BACKGROUND)
-            isHorizontalScrollBarEnabled = false
-            addView(
-                LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(8, 8, 8, 8)
-                    addExtraKeysRow {
-                        controlButton = addExtraKey("CTRL") { toggleControlKey() }
-                        altButton = addExtraKey("ALT") { toggleAltKey() }
-                        addExtraKey("ESC") { sendText("\u001B") }
-                        addExtraKey("TAB") { sendText("\t") }
-                        addExtraKey("-") { sendText("-") }
-                        addExtraKey("/") { sendText("/") }
-                        addExtraKey("|") { sendText("|") }
-                        addExtraKey("BKSP") { sendKeyCode(KeyEvent.KEYCODE_DEL) }
-                        addExtraKey("KBD") { focusTerminal() }
-                    }
-                    addExtraKeysRow {
-                        addExtraKey("HOME") { sendKeyCode(KeyEvent.KEYCODE_MOVE_HOME) }
-                        addExtraKey("UP") { sendKeyCode(KeyEvent.KEYCODE_DPAD_UP) }
-                        addExtraKey("END") { sendKeyCode(KeyEvent.KEYCODE_MOVE_END) }
-                        addExtraKey("PGUP") { sendKeyCode(KeyEvent.KEYCODE_PAGE_UP) }
-                        addExtraKey("LEFT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_LEFT) }
-                        addExtraKey("DOWN") { sendKeyCode(KeyEvent.KEYCODE_DPAD_DOWN) }
-                        addExtraKey("RIGHT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_RIGHT) }
-                        addExtraKey("PGDN") { sendKeyCode(KeyEvent.KEYCODE_PAGE_DOWN) }
-                        addExtraKey("ENTER") { sendText("\r") }
-                    }
-                },
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ),
-            )
+            addExtraKeysRow {
+                addExtraKey("ESC") { sendKeyCode(KeyEvent.KEYCODE_ESCAPE) }
+                addExtraKey("/") { sendText("/") }
+                addExtraKey("―", "-") { sendText("-") }
+                addExtraKey("HOME") { sendKeyCode(KeyEvent.KEYCODE_MOVE_HOME) }
+                addExtraKey("↑") { sendKeyCode(KeyEvent.KEYCODE_DPAD_UP) }
+                addExtraKey("END") { sendKeyCode(KeyEvent.KEYCODE_MOVE_END) }
+                addExtraKey("PGUP") { sendKeyCode(KeyEvent.KEYCODE_PAGE_UP) }
+            }
+            addExtraKeysRow {
+                addExtraKey("↹") { sendKeyCode(KeyEvent.KEYCODE_TAB) }
+                controlButton = addExtraKey("CTRL") { toggleControlKey() }
+                altButton = addExtraKey("ALT") { toggleAltKey() }
+                addExtraKey("←") { sendKeyCode(KeyEvent.KEYCODE_DPAD_LEFT) }
+                addExtraKey("↓") { sendKeyCode(KeyEvent.KEYCODE_DPAD_DOWN) }
+                addExtraKey("→") { sendKeyCode(KeyEvent.KEYCODE_DPAD_RIGHT) }
+                addExtraKey("PGDN") { sendKeyCode(KeyEvent.KEYCODE_PAGE_DOWN) }
+            }
         }
     }
 
@@ -230,17 +221,26 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
                 content()
             },
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f,
             ).apply {
-                bottomMargin = EXTRA_KEYS_ROW_GAP
+                marginStart = 0
+                marginEnd = 0
             },
         )
     }
 
-    private fun LinearLayout.addExtraKey(label: String, onClick: () -> Unit): Button {
+    private fun LinearLayout.addExtraKey(
+        label: String,
+        contentDescription: String = label,
+        onClick: () -> Unit,
+    ): Button {
         val button = Button(context).apply {
             text = label
+            this.contentDescription = contentDescription
+            isAllCaps = false
+            gravity = Gravity.CENTER
             textSize = EXTRA_KEYS_TEXT_SIZE
             setTextColor(EXTRA_KEYS_TEXT_COLOR)
             setBackgroundColor(EXTRA_KEYS_BUTTON_BACKGROUND)
@@ -248,7 +248,18 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
             minHeight = 0
             minimumWidth = 0
             minimumHeight = 0
-            setPadding(22, 10, 22, 10)
+            setPadding(0, 0, 0, 0)
+            setOnTouchListener { view, event ->
+                if (view != controlButton && view != altButton) {
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> view.setBackgroundColor(EXTRA_KEYS_ACTIVE_BACKGROUND)
+                        MotionEvent.ACTION_UP,
+                        MotionEvent.ACTION_CANCEL,
+                        -> view.setBackgroundColor(EXTRA_KEYS_BUTTON_BACKGROUND)
+                    }
+                }
+                false
+            }
             setOnClickListener {
                 onClick()
                 focusTerminal()
@@ -257,11 +268,10 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         addView(
             button,
             LinearLayout.LayoutParams(
-                EXTRA_KEYS_BUTTON_MIN_WIDTH,
-                EXTRA_KEYS_BUTTON_HEIGHT,
-            ).apply {
-                marginEnd = EXTRA_KEYS_BUTTON_GAP
-            },
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                1f,
+            ),
         )
         return button
     }
@@ -504,16 +514,14 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         private const val SYSTEM_SHELL = "/system/bin/sh"
         private const val TRANSCRIPT_ROWS = 2000
         private const val BACK_EXIT_INTERVAL_MILLIS = 2000L
-        private const val EXTRA_KEYS_BACKGROUND = 0xFF20262D.toInt()
-        private const val EXTRA_KEYS_BUTTON_BACKGROUND = 0xFF111820.toInt()
-        private const val EXTRA_KEYS_ACTIVE_BACKGROUND = 0xFF3D6A9F.toInt()
-        private const val EXTRA_KEYS_TEXT_COLOR = 0xFFE8EEF5.toInt()
-        private const val EXTRA_KEYS_ACTIVE_TEXT_COLOR = 0xFFFFFFFF.toInt()
-        private const val EXTRA_KEYS_TEXT_SIZE = 14f
-        private const val EXTRA_KEYS_BUTTON_MIN_WIDTH = 96
-        private const val EXTRA_KEYS_BUTTON_HEIGHT = 58
-        private const val EXTRA_KEYS_BUTTON_GAP = 8
-        private const val EXTRA_KEYS_ROW_GAP = 6
+        private const val EXTRA_KEYS_BACKGROUND = 0xFF000000.toInt()
+        private const val EXTRA_KEYS_BUTTON_BACKGROUND = 0xFF000000.toInt()
+        private const val EXTRA_KEYS_ACTIVE_BACKGROUND = 0xFF9E9E9E.toInt()
+        private const val EXTRA_KEYS_TEXT_COLOR = 0xFFFFFFFF.toInt()
+        private const val EXTRA_KEYS_ACTIVE_TEXT_COLOR = 0xFFFF0000.toInt()
+        private const val EXTRA_KEYS_TEXT_SIZE = 13f
+        private const val EXTRA_KEYS_ROW_HEIGHT = 37.5f
+        private const val EXTRA_KEYS_ROW_COUNT = 2
         private const val DEFAULT_FONT_SIZE = 20
         private const val MIN_FONT_SIZE = 10
         private const val MAX_FONT_SIZE = 32
@@ -532,4 +540,6 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
                 .putExtra(EXTRA_INSTANCE_ID, instanceId)
         }
     }
+
+    private fun Float.dp(): Int = (this * resources.displayMetrics.density + 0.5f).toInt()
 }
