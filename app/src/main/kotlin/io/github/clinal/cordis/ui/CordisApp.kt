@@ -1,7 +1,9 @@
 package io.github.clinal.cordis.ui
 
 import android.content.Intent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,13 +19,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -82,6 +84,7 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                     instanceCount = instances.size,
                     actionsEnabled = actionsEnabled,
                     onAddInstance = viewModel::addInstance,
+                    onOpenTerminal = viewModel::openGlobalTerminal,
                 )
 
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -91,6 +94,7 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                             actionsEnabled = actionsEnabled,
                             onStart = { viewModel.start(instance.id) },
                             onStop = { viewModel.stop(instance.id) },
+                            onOpenTerminal = { viewModel.openInstanceTerminal(instance.id) },
                             onOpenConsole = {
                                 context.startActivity(
                                     Intent(context, ConsoleActivity::class.java)
@@ -132,6 +136,7 @@ private fun Header(
     instanceCount: Int,
     actionsEnabled: Boolean,
     onAddInstance: () -> Unit,
+    onOpenTerminal: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -154,19 +159,26 @@ private fun Header(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Button(onClick = onAddInstance, enabled = actionsEnabled) {
-            Icon(Icons.Default.Add, contentDescription = null)
-            Text("Instance")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
+                Icon(Icons.Default.Terminal, contentDescription = "Global terminal")
+            }
+            Button(onClick = onAddInstance, enabled = actionsEnabled) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Text("Instance")
+            }
         }
     }
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun InstancePanel(
     instance: CordisInstance,
     actionsEnabled: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onOpenTerminal: () -> Unit,
     onOpenConsole: () -> Unit,
     onOpenSettings: () -> Unit,
     onRemove: () -> Unit,
@@ -174,6 +186,12 @@ private fun InstancePanel(
     var autoScroll by remember(instance.id) { mutableStateOf(true) }
 
     Card(
+        modifier = Modifier.combinedClickable(
+            enabled = actionsEnabled,
+            onClick = {},
+            onLongClick = onRemove,
+            onLongClickLabel = "Remove ${instance.name}",
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -233,6 +251,9 @@ private fun InstancePanel(
                 ) {
                     Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
                 }
+                IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
+                    Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
+                }
                 IconButton(
                     onClick = onStart,
                     enabled = actionsEnabled && instance.status.canStart,
@@ -244,9 +265,6 @@ private fun InstancePanel(
                 }
                 IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
                     Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
-                }
-                IconButton(onClick = onRemove, enabled = actionsEnabled) {
-                    Icon(Icons.Default.Delete, contentDescription = "Remove ${instance.name}")
                 }
             }
 
