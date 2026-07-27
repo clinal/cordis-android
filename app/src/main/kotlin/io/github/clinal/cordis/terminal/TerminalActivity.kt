@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -88,7 +89,11 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         return SessionSpec(
             shellPath = SYSTEM_SHELL,
             cwd = paths.filesDir.absolutePath,
-            args = arrayOf(SYSTEM_SHELL, "-i"),
+            args = arrayOf(
+                SYSTEM_SHELL,
+                "-c",
+                "echo 'Cordis Android shell'; export PS1='cordis $ '; exec $SYSTEM_SHELL -i",
+            ),
             env = baseEnv(paths),
         )
     }
@@ -104,6 +109,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
 
     private fun openTerminal(spec: SessionSpec) {
         terminalView = TerminalView(this, null).apply {
+            setBackgroundColor(Color.BLACK)
             setTerminalViewClient(this@TerminalActivity)
             setTextSize(14)
             isFocusable = true
@@ -125,6 +131,8 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     private fun showStatus(message: String) {
         val status = TextView(this).apply {
             text = message
+            setBackgroundColor(Color.BLACK)
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(24, 24, 24, 24)
         }
