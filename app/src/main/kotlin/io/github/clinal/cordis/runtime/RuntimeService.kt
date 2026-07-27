@@ -17,6 +17,7 @@ class RuntimeService : Service() {
         when (intent?.action) {
             ACTION_START -> supervisor.start(instanceId)
             ACTION_STOP -> supervisor.stop(instanceId)
+            ACTION_REMOVE -> supervisor.remove(instanceId)
         }
         return START_STICKY
     }
@@ -24,6 +25,7 @@ class RuntimeService : Service() {
     companion object {
         const val ACTION_START = "io.github.clinal.cordis.runtime.START"
         const val ACTION_STOP = "io.github.clinal.cordis.runtime.STOP"
+        const val ACTION_REMOVE = "io.github.clinal.cordis.runtime.REMOVE"
         const val EXTRA_INSTANCE_ID = "instance_id"
     }
 }
