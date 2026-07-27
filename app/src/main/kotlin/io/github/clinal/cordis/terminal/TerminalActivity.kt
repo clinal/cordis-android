@@ -11,8 +11,12 @@ import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.widget.Button
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -35,6 +39,10 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     private var terminalSession: TerminalSession? = null
     private var fontSize = DEFAULT_FONT_SIZE
     private var lastBackPressedAt = 0L
+    private var controlKey = false
+    private var altKey = false
+    private var controlButton: Button? = null
+    private var altButton: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +76,14 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         super.onDestroy()
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_UP) handleBackPressed()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     private fun buildSessionSpec(): SessionSpec {
         return when (intent.mode) {
             Mode.INSTANCE -> buildInstanceSessionSpec()
@@ -89,7 +105,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
             "Runtime bootstrap assets are not packaged in this build."
         }
 
-        val command = ProotCommandBuilder(paths).cordisCommand(instance.id)
+        val command = ProotCommandBuilder(paths).loginShellCommand(instance.id)
         return SessionSpec(
             shellPath = command.first(),
             cwd = paths.filesDir.absolutePath,
@@ -138,9 +154,141 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
             TRANSCRIPT_ROWS,
             this,
         )
-        setContentView(terminalView)
+        setContentView(createTerminalLayout())
         terminalView.attachSession(terminalSession)
         focusTerminal()
+    }
+
+    private fun createTerminalLayout(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+            addView(
+                terminalView,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f,
+                ),
+            )
+            addView(createExtraKeysView())
+        }
+    }
+
+    private fun createExtraKeysView(): HorizontalScrollView {
+        return HorizontalScrollView(this).apply {
+            setBackgroundColor(EXTRA_KEYS_BACKGROUND)
+            isHorizontalScrollBarEnabled = false
+            addView(
+                LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(6, 6, 6, 6)
+                    controlButton = addExtraKey("CTRL") { toggleControlKey() }
+                    altButton = addExtraKey("ALT") { toggleAltKey() }
+                    addExtraKey("ESC") { sendText("\u001B") }
+                    addExtraKey("TAB") { sendText("\t") }
+                    addExtraKey("-") { sendText("-") }
+                    addExtraKey("/") { sendText("/") }
+                    addExtraKey("|") { sendText("|") }
+                    addExtraKey("HOME") { sendKeyCode(KeyEvent.KEYCODE_MOVE_HOME) }
+                    addExtraKey("UP") { sendKeyCode(KeyEvent.KEYCODE_DPAD_UP) }
+                    addExtraKey("END") { sendKeyCode(KeyEvent.KEYCODE_MOVE_END) }
+                    addExtraKey("PGUP") { sendKeyCode(KeyEvent.KEYCODE_PAGE_UP) }
+                    addExtraKey("LEFT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_LEFT) }
+                    addExtraKey("DOWN") { sendKeyCode(KeyEvent.KEYCODE_DPAD_DOWN) }
+                    addExtraKey("RIGHT") { sendKeyCode(KeyEvent.KEYCODE_DPAD_RIGHT) }
+                    addExtraKey("PGDN") { sendKeyCode(KeyEvent.KEYCODE_PAGE_DOWN) }
+                    addExtraKey("BKSP") { sendKeyCode(KeyEvent.KEYCODE_DEL) }
+                    addExtraKey("ENTER") { sendText("\r") }
+                    addExtraKey("KBD") { focusTerminal() }
+                },
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+    }
+
+    private fun LinearLayout.addExtraKey(label: String, onClick: () -> Unit): Button {
+        val button = Button(context).apply {
+            text = label
+            textSize = 12f
+            setTextColor(EXTRA_KEYS_TEXT_COLOR)
+            setBackgroundColor(EXTRA_KEYS_BUTTON_BACKGROUND)
+            minWidth = 0
+            minHeight = 0
+            minimumWidth = 0
+            minimumHeight = 0
+            setPadding(18, 8, 18, 8)
+            setOnClickListener {
+                onClick()
+                focusTerminal()
+            }
+        }
+        addView(
+            button,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                marginEnd = 6
+            },
+        )
+        return button
+    }
+
+    private fun toggleControlKey() {
+        controlKey = !controlKey
+        updateModifierButtons()
+    }
+
+    private fun toggleAltKey() {
+        altKey = !altKey
+        updateModifierButtons()
+    }
+
+    private fun updateModifierButtons() {
+        updateModifierButton(controlButton, controlKey)
+        updateModifierButton(altButton, altKey)
+    }
+
+    private fun updateModifierButton(button: Button?, active: Boolean) {
+        button?.isActivated = active
+        button?.setTextColor(if (active) EXTRA_KEYS_ACTIVE_TEXT_COLOR else EXTRA_KEYS_TEXT_COLOR)
+        button?.setBackgroundColor(if (active) EXTRA_KEYS_ACTIVE_BACKGROUND else EXTRA_KEYS_BUTTON_BACKGROUND)
+    }
+
+    private fun sendKeyCode(keyCode: Int) {
+        val metaState = keyMetaState()
+        val event = KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, metaState)
+        terminalView.onKeyDown(keyCode, event)
+        resetModifierKeys()
+    }
+
+    private fun sendText(text: String) {
+        text.codePoints().forEach { codePoint ->
+            terminalView.inputCodePoint(
+                codePoint,
+                controlKey,
+                altKey,
+            )
+        }
+        resetModifierKeys()
+    }
+
+    private fun keyMetaState(): Int {
+        var metaState = 0
+        if (controlKey) metaState = metaState or KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        if (altKey) metaState = metaState or KeyEvent.META_ALT_ON or KeyEvent.META_ALT_LEFT_ON
+        return metaState
+    }
+
+    private fun resetModifierKeys() {
+        controlKey = false
+        altKey = false
+        updateModifierButtons()
     }
 
     private fun focusTerminal() {
@@ -245,15 +393,18 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
 
     override fun onLongPress(event: MotionEvent): Boolean = false
 
-    override fun readControlKey(): Boolean = false
+    override fun readControlKey(): Boolean = controlKey
 
-    override fun readAltKey(): Boolean = false
+    override fun readAltKey(): Boolean = altKey
 
     override fun readShiftKey(): Boolean = false
 
     override fun readFnKey(): Boolean = false
 
-    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
+    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+        if (controlKey || altKey) resetModifierKeys()
+        return false
+    }
 
     override fun onEmulatorSet() = Unit
 
@@ -309,6 +460,11 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         private const val SYSTEM_SHELL = "/system/bin/sh"
         private const val TRANSCRIPT_ROWS = 2000
         private const val BACK_EXIT_INTERVAL_MILLIS = 2000L
+        private const val EXTRA_KEYS_BACKGROUND = 0xFF20262D.toInt()
+        private const val EXTRA_KEYS_BUTTON_BACKGROUND = 0xFF111820.toInt()
+        private const val EXTRA_KEYS_ACTIVE_BACKGROUND = 0xFF3D6A9F.toInt()
+        private const val EXTRA_KEYS_TEXT_COLOR = 0xFFE8EEF5.toInt()
+        private const val EXTRA_KEYS_ACTIVE_TEXT_COLOR = 0xFFFFFFFF.toInt()
         private const val DEFAULT_FONT_SIZE = 18
         private const val MIN_FONT_SIZE = 10
         private const val MAX_FONT_SIZE = 32
