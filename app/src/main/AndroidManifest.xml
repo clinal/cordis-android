@@ -22,7 +22,8 @@
         <activity
             android:name=".terminal.TerminalActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".runtime.RuntimeService"
