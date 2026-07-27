@@ -1,9 +1,9 @@
 package io.github.clinal.cordis.data
 
 import android.content.Context
-import io.github.clinal.cordis.domain.AppSettings
 import io.github.clinal.cordis.domain.CordisInstance
 import io.github.clinal.cordis.domain.RuntimeStatus
+import io.github.clinal.cordis.runtime.RuntimePaths
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -11,48 +11,70 @@ import kotlinx.coroutines.flow.update
 class InstanceRepository(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-
-    private val mutableSettings = MutableStateFlow(AppSettings(basePort = loadBasePort()))
-    val settings: StateFlow<AppSettings> = mutableSettings
+    private val paths = RuntimePaths(appContext)
 
     private val mutableInstances = MutableStateFlow(loadInstances())
     val instances: StateFlow<List<CordisInstance>> = mutableInstances
 
     fun addInstance() {
         val nextIndex = nextInstanceIndex()
-        preferences.edit().putStringSet(KEY_INSTANCE_IDS, currentIds() + instanceId(nextIndex)).apply()
+        val id = instanceId(nextIndex)
+        val currentInstances = mutableInstances.value
+        val instance = CordisInstance(
+            id = id,
+            name = "instance $nextIndex",
+            port = nextAvailablePort(currentInstances),
+            dns = DEFAULT_DNS,
+            status = initialStatus(),
+            lastLogLines = listOf("Press Start to prepare the Cordis runtime."),
+        )
+
+        preferences.edit().putStringSet(KEY_INSTANCE_IDS, currentIds() + id).apply()
+        paths.instanceHome(id).mkdirs()
+        saveInstanceConfig(instance)
         mutableInstances.update { instances ->
-            instances + CordisInstance(
-                id = instanceId(nextIndex),
-                name = "instance $nextIndex",
-                port = mutableSettings.value.basePort + instances.size,
-                status = initialStatus(),
-                lastLogLines = listOf("Press Start to prepare the Cordis runtime."),
-            )
+            instances + instance
         }
     }
 
     fun removeInstance(id: String) {
-        if (id == DEFAULT_INSTANCE_ID) return
-
         preferences.edit().putStringSet(KEY_INSTANCE_IDS, currentIds() - id).apply()
+        clearInstanceConfig(id)
+        paths.instanceHome(id).deleteRecursively()
         mutableInstances.update { instances ->
-            instances
-                .filterNot { it.id == id }
-                .mapIndexed { index, instance -> instance.copy(port = mutableSettings.value.basePort + index) }
+            instances.filterNot { it.id == id }
         }
     }
 
-    fun updateBasePort(port: Int) {
-        val sanitizedPort = port.coerceIn(MIN_PORT, maxBasePort(mutableInstances.value.size))
-        preferences.edit().putInt(KEY_BASE_PORT, sanitizedPort).apply()
-        mutableSettings.value = AppSettings(basePort = sanitizedPort)
+    fun updateInstanceConfig(id: String, name: String, port: Int, dns: String) {
+        val sanitizedName = name.trim().ifBlank { defaultName(id) }
+        val sanitizedPort = port.coerceIn(MIN_PORT, MAX_PORT)
+        val sanitizedDns = dns.trim().ifBlank { DEFAULT_DNS }
         mutableInstances.update { instances ->
-            instances.mapIndexed { index, instance -> instance.copy(port = sanitizedPort + index) }
+            instances.map { instance ->
+                if (instance.id == id) {
+                    instance.copy(name = sanitizedName, port = sanitizedPort, dns = sanitizedDns)
+                        .also(::saveInstanceConfig)
+                } else {
+                    instance
+                }
+            }
         }
     }
 
     fun instance(id: String): CordisInstance? = mutableInstances.value.firstOrNull { it.id == id }
+
+    fun autoStartInstanceIds(): List<String> {
+        return mutableInstances.value
+            .filter { instance -> preferences.getBoolean(instanceKey(instance.id, KEY_AUTO_START), false) }
+            .map(CordisInstance::id)
+    }
+
+    fun setAutoStart(id: String, enabled: Boolean) {
+        preferences.edit()
+            .putBoolean(instanceKey(id, KEY_AUTO_START), enabled)
+            .apply()
+    }
 
     fun updateStatus(id: String, status: RuntimeStatus, logLine: String? = null) {
         mutableInstances.update { instances ->
@@ -82,49 +104,71 @@ class InstanceRepository(context: Context) {
     }
 
     private fun initialStatus(): RuntimeStatus {
-        val bootstrap = appContext.filesDir.resolve("data/proot-static")
-        return if (bootstrap.canExecute()) RuntimeStatus.Stopped else RuntimeStatus.MissingBootstrap
+        return RuntimeStatus.Stopped
     }
 
     private fun loadInstances(): List<CordisInstance> {
         val ids = currentIds().sortedWith(compareBy(::instanceSortIndex, { it }))
-        val basePort = mutableSettings.value.basePort
         return ids.mapIndexed { index, id ->
+            paths.instanceHome(id).mkdirs()
             CordisInstance(
                 id = id,
-                name = if (id == DEFAULT_INSTANCE_ID) "default" else "instance ${instanceSortIndex(id)}",
-                port = basePort + index,
+                name = preferences.getString(instanceKey(id, KEY_NAME), null) ?: defaultName(id),
+                port = preferences.getInt(instanceKey(id, KEY_PORT), DEFAULT_BASE_PORT + index)
+                    .coerceIn(MIN_PORT, MAX_PORT),
+                dns = preferences.getString(instanceKey(id, KEY_DNS), null)
+                    ?.trim()
+                    ?.ifBlank { DEFAULT_DNS }
+                    ?: DEFAULT_DNS,
                 status = initialStatus(),
                 lastLogLines = listOf("Press Start to prepare the Cordis runtime."),
             )
         }
     }
 
-    private fun loadBasePort(): Int {
-        return preferences.getInt(KEY_BASE_PORT, DEFAULT_BASE_PORT).coerceIn(MIN_PORT, MAX_PORT)
+    private fun defaultName(id: String): String {
+        return "instance ${instanceSortIndex(id)}"
     }
 
-    private fun maxBasePort(instanceCount: Int): Int = MAX_PORT - (instanceCount - 1).coerceAtLeast(0)
-
     private fun currentIds(): Set<String> {
-        return preferences.getStringSet(KEY_INSTANCE_IDS, null)
-            ?.takeIf { it.isNotEmpty() }
-            ?: setOf(DEFAULT_INSTANCE_ID)
+        return preferences.getStringSet(KEY_INSTANCE_IDS, emptySet()).orEmpty() - DEFAULT_INSTANCE_ID
     }
 
     private fun nextInstanceIndex(): Int {
         val used = currentIds().map(::instanceSortIndex).toSet()
-        return generateSequence(2) { it + 1 }.first { it !in used }
+        return generateSequence(1) { it + 1 }.first { it !in used }
     }
 
     private fun instanceSortIndex(id: String): Int {
-        return when (id) {
-            DEFAULT_INSTANCE_ID -> 1
-            else -> id.removePrefix(INSTANCE_ID_PREFIX).toIntOrNull() ?: Int.MAX_VALUE
-        }
+        return id.removePrefix(INSTANCE_ID_PREFIX).toIntOrNull() ?: Int.MAX_VALUE
     }
 
     private fun instanceId(index: Int): String = "$INSTANCE_ID_PREFIX$index"
+
+    private fun nextAvailablePort(instances: List<CordisInstance>): Int {
+        val used = instances.map(CordisInstance::port).toSet()
+        return generateSequence(DEFAULT_BASE_PORT) { it + 1 }
+            .first { it in MIN_PORT..MAX_PORT && it !in used }
+    }
+
+    private fun saveInstanceConfig(instance: CordisInstance) {
+        preferences.edit()
+            .putString(instanceKey(instance.id, KEY_NAME), instance.name)
+            .putInt(instanceKey(instance.id, KEY_PORT), instance.port)
+            .putString(instanceKey(instance.id, KEY_DNS), instance.dns)
+            .apply()
+    }
+
+    private fun clearInstanceConfig(id: String) {
+        preferences.edit()
+            .remove(instanceKey(id, KEY_NAME))
+            .remove(instanceKey(id, KEY_PORT))
+            .remove(instanceKey(id, KEY_DNS))
+            .remove(instanceKey(id, KEY_AUTO_START))
+            .apply()
+    }
+
+    private fun instanceKey(id: String, key: String): String = "$id.$key"
 
     private fun appendLog(lines: List<String>, line: String?): List<String> {
         if (line.isNullOrBlank()) return lines
@@ -134,9 +178,13 @@ class InstanceRepository(context: Context) {
     companion object {
         const val DEFAULT_INSTANCE_ID = "default"
         const val DEFAULT_BASE_PORT = 3140
+        const val DEFAULT_DNS = "223.5.5.5"
         private const val PREFERENCES_NAME = "cordis_instances"
-        private const val KEY_BASE_PORT = "base_port"
         private const val KEY_INSTANCE_IDS = "instance_ids"
+        private const val KEY_NAME = "name"
+        private const val KEY_PORT = "port"
+        private const val KEY_DNS = "dns"
+        private const val KEY_AUTO_START = "auto_start"
         private const val INSTANCE_ID_PREFIX = "instance-"
         private const val MIN_PORT = 1024
         private const val MAX_PORT = 65535

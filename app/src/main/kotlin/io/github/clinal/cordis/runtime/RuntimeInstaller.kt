@@ -13,7 +13,6 @@ class RuntimeInstaller(context: Context) {
     private val paths = RuntimePaths(appContext)
 
     fun prepare(instanceId: String, port: Int, onProgress: (String) -> Unit = {}) {
-        installBootstrap(onProgress)
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
 
@@ -23,7 +22,24 @@ class RuntimeInstaller(context: Context) {
         ensureAppPortConfig(instanceHome, port, onProgress)
     }
 
+    fun prepareBootstrap(onProgress: (String) -> Unit = {}) {
+        synchronized(bootstrapInstallLock) {
+            installBootstrap(onProgress)
+        }
+    }
+
     fun isBootstrapInstalled(): Boolean = paths.proot.canExecute() && paths.envFile.exists()
+
+    fun needsBootstrapInstall(): Boolean {
+        return try {
+            val bundledEnv = readAssetText("bootstrap/env.txt").trim()
+            val installedEnv = paths.envFile.takeIf(File::exists)?.readText()?.trim()
+            !paths.proot.canExecute() || installedEnv != bundledEnv
+        } catch (error: BootstrapAssetMissingException) {
+            Log.i(TAG, "Bootstrap assets are not packaged in this build.", error)
+            false
+        }
+    }
 
     private fun installBootstrap(onProgress: (String) -> Unit) {
         paths.filesDir.mkdirs()
@@ -52,17 +68,6 @@ class RuntimeInstaller(context: Context) {
     }
 
     private fun unpackBootstrap(onProgress: (String) -> Unit) {
-        if (paths.root.exists()) {
-            onProgress("Repairing existing bootstrap directory.")
-            unpackZip(
-                assetPath = "bootstrap/bootstrap.zip",
-                target = paths.root,
-                restoreMetadata = true,
-                onProgress = onProgress,
-            )
-            return
-        }
-
         val staging = paths.filesDir.resolve("data-staging")
         if (staging.exists()) {
             staging.deleteRecursively()
@@ -72,18 +77,28 @@ class RuntimeInstaller(context: Context) {
         }
 
         try {
+            if (paths.root.exists()) {
+                onProgress("Repairing existing bootstrap directory.")
+            }
             unpackZip(
                 assetPath = "bootstrap/bootstrap.zip",
                 target = staging,
                 restoreMetadata = true,
                 onProgress = onProgress,
             )
-            if (!paths.root.exists() && !staging.renameTo(paths.root)) {
-                error("Cannot move bootstrap staging directory into place.")
-            }
+            moveBootstrapIntoPlace(staging)
         } catch (error: Throwable) {
             staging.deleteRecursively()
             throw error
+        }
+    }
+
+    private fun moveBootstrapIntoPlace(staging: File) {
+        if (paths.root.exists() && !paths.root.deleteRecursively()) {
+            error("Cannot remove existing bootstrap directory.")
+        }
+        if (!staging.renameTo(paths.root)) {
+            error("Cannot move bootstrap staging directory into place.")
         }
     }
 
@@ -139,35 +154,19 @@ class RuntimeInstaller(context: Context) {
         val original = config.readLines()
         val updated = mutableListOf<String>()
         var inServerPlugin = false
-        var foundServerPlugin = false
-        var foundConfig = false
         var replacedPort = false
-
-        fun finishServerPlugin() {
-            if (!inServerPlugin) return
-            if (!foundConfig) {
-                updated += "  config:"
-            }
-            if (!replacedPort) {
-                updated += "    port: $port"
-            }
-        }
 
         original.forEach { line ->
             val trimmed = line.trim()
-            if (trimmed.startsWith("- name:")) {
-                finishServerPlugin()
-                inServerPlugin = trimmed == "- name: '@cordisjs/plugin-server'" ||
-                    trimmed == "- name: \"@cordisjs/plugin-server\""
-                foundServerPlugin = foundServerPlugin || inServerPlugin
-                foundConfig = false
-                replacedPort = false
-                updated += line
-                return@forEach
+            if (line.startsWith("- ")) {
+                inServerPlugin = false
             }
 
-            if (inServerPlugin && trimmed.startsWith("config:")) {
-                foundConfig = true
+            if (line.topLevelPluginName() != null) {
+                val pluginName = line.topLevelPluginName()
+                inServerPlugin = pluginName == "@cordisjs/plugin-server"
+                updated += line
+                return@forEach
             }
 
             if (inServerPlugin && trimmed.startsWith("port:")) {
@@ -179,19 +178,24 @@ class RuntimeInstaller(context: Context) {
             }
         }
 
-        finishServerPlugin()
-        if (!foundServerPlugin) {
-            updated += "- name: '@cordisjs/plugin-server'"
-            updated += "  config:"
-            updated += "    host: 127.0.0.1"
-            updated += "    port: $port"
-        }
-
         val updatedText = updated.joinToString(separator = "\n", postfix = "\n")
         if (updatedText != config.readText()) {
             config.writeText(updatedText)
             onProgress("Configured Cordis app port $port.")
+        } else if (!replacedPort) {
+            onProgress("Cordis app port was not found in app.yml.")
         }
+    }
+
+    private fun String.topLevelPluginName(): String? {
+        val indent = takeWhile(Char::isWhitespace).length
+        val trimmed = trim()
+        val nameValue = when {
+            indent == 2 && trimmed.startsWith("name:") -> trimmed.removePrefix("name:")
+            indent == 0 && trimmed.startsWith("- name:") -> trimmed.removePrefix("- name:")
+            else -> return null
+        }
+        return nameValue.trim().trim('\'', '"')
     }
 
     private fun unpackZip(
@@ -287,6 +291,7 @@ class RuntimeInstaller(context: Context) {
     }
 
     companion object {
+        private val bootstrapInstallLock = Any()
         private const val TAG = "RuntimeInstaller"
         private const val EXECUTABLE_MODE = 448
         private const val PROGRESS_INTERVAL = 500
