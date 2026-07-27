@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import io.github.clinal.cordis.CordisApplication
 import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.runtime.RuntimeService
+import io.github.clinal.cordis.terminal.TerminalActivity
 
 class CordisViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as CordisApplication
@@ -25,6 +26,16 @@ class CordisViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateInstanceConfig(instanceId: String, name: String, port: Int, dns: String) {
         app.instanceRepository.updateInstanceConfig(instanceId, name, port, dns)
+    }
+
+    fun openGlobalTerminal() {
+        val intent = TerminalActivity.globalIntent(app).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        app.startActivity(intent)
+    }
+
+    fun openInstanceTerminal(instanceId: String) {
+        val intent = TerminalActivity.instanceIntent(app, instanceId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        app.startActivity(intent)
     }
 
     fun start(instanceId: String = InstanceRepository.DEFAULT_INSTANCE_ID) {

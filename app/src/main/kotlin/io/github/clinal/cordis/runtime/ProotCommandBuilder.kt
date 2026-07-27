@@ -18,7 +18,23 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         )
     }
 
+    fun loginShellCommand(instanceId: String): List<String> {
+        return prootCommandPrefix(instanceId) + listOf(
+            "/bin/sh",
+            "/bin/login",
+        )
+    }
+
     fun shellCommand(instanceId: String, command: String): List<String> {
+        return prootCommandPrefix(instanceId) + listOf(
+            "/bin/sh",
+            "/bin/login",
+            "-c",
+            command,
+        )
+    }
+
+    private fun prootCommandPrefix(instanceId: String): List<String> {
         val instanceHome = paths.instanceHome(instanceId)
         val envRoot = paths.envFile.readText().trim()
         return listOf(
@@ -41,10 +57,6 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
             "/dev:/dev",
             "--sysvipc",
             "--link2symlink",
-            "/bin/sh",
-            "/bin/login",
-            "-c",
-            command,
         )
     }
 }
