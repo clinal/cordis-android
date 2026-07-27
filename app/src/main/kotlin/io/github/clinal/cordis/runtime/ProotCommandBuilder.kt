@@ -4,15 +4,7 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
     fun cordisCommand(instanceId: String): List<String> {
         return shellCommand(
             instanceId = instanceId,
-            command = """
-                setsid sh <<'CORDIS_EOF'
-                trap : SIGINT
-                echo __PID__: ${'$'}${'$'}
-                cd /home && PROOT_TMP_DIR=/tmp node .yarn/releases/yarn-4.14.1.cjs start
-                echo __STATUS__: ${'$'}?
-                echo -e '\n[Process exited.]\n\n'
-                CORDIS_EOF
-            """.trimIndent(),
+            command = cordisStartupScript(),
         )
     }
 
@@ -45,4 +37,18 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
             command,
         )
     }
+}
+
+internal fun cordisStartupScript(): String {
+    return """
+        setsid sh <<'CORDIS_EOF'
+        trap : SIGINT
+        echo __PID__: ${'$'}${'$'}
+        cd /home && PROOT_TMP_DIR=/tmp node .yarn/releases/yarn-4.14.1.cjs start
+        status=${'$'}?
+        echo __STATUS__: ${'$'}status
+        echo -e '\n[Process exited.]\n\n'
+        exit ${'$'}status
+        CORDIS_EOF
+    """.trimIndent()
 }

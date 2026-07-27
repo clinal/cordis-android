@@ -30,6 +30,9 @@
           gradle
           pkgs.jdk17
           androidSdk
+          pkgs.file
+          pkgs.qemu
+          pkgs.unzip
         ];
 
         ANDROID_HOME = "${androidSdk}/libexec/android-sdk";

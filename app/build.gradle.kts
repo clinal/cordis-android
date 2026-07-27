@@ -88,5 +88,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
 
+    testImplementation(kotlin("test"))
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

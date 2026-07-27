@@ -46,6 +46,12 @@ jobs:
       - name: Build bootstrap assets
         run: nix build ./bootstrap
 
+      - name: Test proot bootstrap
+        run: nix develop --command scripts/test-proot-bootstrap.sh
+
+      - name: Run JVM unit tests
+        run: nix develop --command gradle --build-cache testDebugUnitTest
+
       - name: Prepare CI signing key
         if: env.CORDIS_ANDROID_KEYSTORE_BASE64 != ''
         run: |
