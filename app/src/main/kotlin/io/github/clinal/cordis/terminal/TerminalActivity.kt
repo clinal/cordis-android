@@ -43,11 +43,15 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     private var altKey = false
     private var controlButton: Button? = null
     private var altButton: Button? = null
+    private var terminalFinished = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = if (intent.mode == Mode.INSTANCE) "Cordis terminal" else "Global terminal"
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        window.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+        )
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
@@ -79,6 +83,10 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (event.action == KeyEvent.ACTION_UP) handleBackPressed()
+            return true
+        }
+        if (terminalFinished && event.keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (event.action == KeyEvent.ACTION_UP) finish()
             return true
         }
         return super.dispatchKeyEvent(event)
@@ -261,6 +269,11 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     }
 
     private fun sendKeyCode(keyCode: Int) {
+        if (terminalFinished && keyCode == KeyEvent.KEYCODE_ENTER) {
+            finish()
+            return
+        }
+
         val metaState = keyMetaState()
         val event = KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, metaState)
         terminalView.onKeyDown(keyCode, event)
@@ -268,6 +281,11 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     }
 
     private fun sendText(text: String) {
+        if (terminalFinished && (text == "\r" || text == "\n")) {
+            finish()
+            return
+        }
+
         text.codePoints().forEach { codePoint ->
             terminalView.inputCodePoint(
                 codePoint,
@@ -332,6 +350,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
     }
 
     override fun onSessionFinished(finishedSession: TerminalSession) {
+        if (finishedSession == terminalSession) terminalFinished = true
         Toast.makeText(this, "Terminal exited.", Toast.LENGTH_SHORT).show()
     }
 
@@ -387,7 +406,13 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
 
     override fun copyModeChanged(copyMode: Boolean) = Unit
 
-    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
+    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+        if (terminalFinished && keyCode == KeyEvent.KEYCODE_ENTER) {
+            finish()
+            return true
+        }
+        return false
+    }
 
     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
 

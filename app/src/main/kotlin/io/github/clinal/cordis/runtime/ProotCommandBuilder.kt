@@ -20,8 +20,7 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
 
     fun loginShellCommand(instanceId: String): List<String> {
         return prootCommandPrefix(instanceId) + listOf(
-            "-w",
-            "/home",
+            "/bin/sh",
             "/bin/login",
         )
     }
