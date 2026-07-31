@@ -7,7 +7,7 @@
   inputs.anillc.url = "github:Anillc/flakes/be4ce4f0a20c2be33cf3d99ed34f20b350c07016";
   inputs.node-pkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.nix-on-droid = {
-    url = "github:Anillc/nix-on-droid/e082472db71e249c00225ed83b2bed6569f72084";
+    url = "github:Anillc/nix-on-droid/ead1bfcf5610ef4800a46deaf54162f0bed66262";
     inputs.nixpkgs.follows = "nixpkgs";
   };
 
