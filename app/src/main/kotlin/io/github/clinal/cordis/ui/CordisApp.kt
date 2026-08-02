@@ -47,10 +47,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,8 +64,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.domain.CordisInstance
 import io.github.clinal.cordis.domain.RuntimeStatus
+import java.util.Locale
 
 @Composable
+@OptIn(ExperimentalComposeUiApi::class)
 fun CordisApp(viewModel: CordisViewModel = viewModel()) {
     val context = LocalContext.current
     val instances by viewModel.instances.collectAsState()
@@ -69,7 +75,11 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
     var pendingDelete by remember { mutableStateOf<CordisInstance?>(null) }
     val actionsEnabled = !bootstrapInstallState.installing
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .semantics { testTagsAsResourceId = true },
+    ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
@@ -145,6 +155,7 @@ private fun Header(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
+                modifier = Modifier.testTag("cordis.title"),
                 text = "Cordis",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -163,7 +174,11 @@ private fun Header(
             IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
                 Icon(Icons.Default.Terminal, contentDescription = "Global terminal")
             }
-            Button(onClick = onAddInstance, enabled = actionsEnabled) {
+            Button(
+                modifier = Modifier.testTag("cordis.addInstance"),
+                onClick = onAddInstance,
+                enabled = actionsEnabled,
+            ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Text("Instance")
             }
@@ -186,12 +201,14 @@ private fun InstancePanel(
     var autoScroll by remember(instance.id) { mutableStateOf(true) }
 
     Card(
-        modifier = Modifier.combinedClickable(
-            enabled = actionsEnabled,
-            onClick = {},
-            onLongClick = onRemove,
-            onLongClickLabel = "Remove ${instance.name}",
-        ),
+        modifier = Modifier
+            .testTag("cordis.instance.${instance.id}")
+            .combinedClickable(
+                enabled = actionsEnabled,
+                onClick = {},
+                onLongClick = onRemove,
+                onLongClickLabel = "Remove ${instance.name}",
+            ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -255,12 +272,17 @@ private fun InstancePanel(
                     Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
                 }
                 IconButton(
+                    modifier = Modifier.testTag("cordis.instance.${instance.id}.start"),
                     onClick = onStart,
                     enabled = actionsEnabled && instance.status.canStart,
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
                 }
-                IconButton(onClick = onStop, enabled = actionsEnabled) {
+                IconButton(
+                    modifier = Modifier.testTag("cordis.instance.${instance.id}.stop"),
+                    onClick = onStop,
+                    enabled = actionsEnabled,
+                ) {
                     Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
                 }
                 IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
@@ -381,7 +403,11 @@ private fun StatusChip(status: RuntimeStatus) {
         RuntimeStatus.Stopping -> "Stopping"
         RuntimeStatus.Failed -> "Failed"
     }
-    AssistChip(onClick = {}, label = { Text(label) })
+    AssistChip(
+        modifier = Modifier.testTag("cordis.status.${status.name.lowercase(Locale.US)}"),
+        onClick = {},
+        label = { Text(label) },
+    )
 }
 
 @Composable
@@ -389,6 +415,7 @@ private fun BootstrapInstallOverlay(message: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .testTag("cordis.bootstrapOverlay")
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
             .pointerInput(Unit) {
                 awaitPointerEventScope {
