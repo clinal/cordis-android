@@ -1,13 +1,17 @@
 package io.github.clinal.cordis.runtime
 
 class ProotCommandBuilder(private val paths: RuntimePaths) {
-    fun cordisCommand(instanceId: String): List<String> {
+    fun cordisCommand(instanceId: String, environment: Map<String, String> = emptyMap()): List<String> {
+        val exports = environment.entries.joinToString("\n") { (key, value) ->
+            "export $key=${value.shellQuote()}"
+        }
         return shellCommand(
             instanceId = instanceId,
             command = """
                 setsid sh <<'CORDIS_EOF'
                 trap : SIGINT
                 echo __PID__: ${'$'}${'$'}
+                $exports
                 cd /home && PROOT_TMP_DIR=/tmp node .yarn/releases/yarn-4.14.1.cjs start
                 status=${'$'}?
                 echo __STATUS__: ${'$'}status
@@ -58,5 +62,9 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
             "--sysvipc",
             "--link2symlink",
         )
+    }
+
+    private fun String.shellQuote(): String {
+        return "'${replace("'", "'\"'\"'")}'"
     }
 }

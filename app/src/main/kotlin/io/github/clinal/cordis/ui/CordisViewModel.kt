@@ -5,12 +5,14 @@ import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import io.github.clinal.cordis.CordisApplication
 import io.github.clinal.cordis.data.InstanceRepository
+import io.github.clinal.cordis.domain.CordisButton
 import io.github.clinal.cordis.runtime.RuntimeService
 import io.github.clinal.cordis.terminal.TerminalActivity
 
 class CordisViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as CordisApplication
     val instances = app.instanceRepository.instances
+    val homeShortcuts = app.instanceRepository.homeShortcuts
     val bootstrapInstallState = app.bootstrapInstallState
 
     fun addInstance() {
@@ -50,5 +52,17 @@ class CordisViewModel(application: Application) : AndroidViewModel(application) 
             .setAction(RuntimeService.ACTION_STOP)
             .putExtra(RuntimeService.EXTRA_INSTANCE_ID, instanceId)
         app.startService(intent)
+    }
+
+    fun addHomeShortcut(instanceId: String, button: CordisButton) {
+        app.instanceRepository.addHomeShortcut(instanceId, button)
+    }
+
+    fun removeHomeShortcut(instanceId: String, buttonId: String) {
+        app.instanceRepository.removeHomeShortcut(instanceId, buttonId)
+    }
+
+    fun clickBridgeButton(instanceId: String, buttonId: String) {
+        app.runtimeSupervisor.clickBridgeButton(instanceId, buttonId)
     }
 }
