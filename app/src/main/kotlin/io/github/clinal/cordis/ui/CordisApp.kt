@@ -19,9 +19,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -36,6 +38,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,7 +65,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.clinal.cordis.data.InstanceRepository
+import io.github.clinal.cordis.domain.AndroidBridgeStatus
+import io.github.clinal.cordis.domain.CordisButton
 import io.github.clinal.cordis.domain.CordisInstance
+import io.github.clinal.cordis.domain.HomeShortcut
 import io.github.clinal.cordis.domain.RuntimeStatus
 import java.util.Locale
 
@@ -71,6 +77,7 @@ import java.util.Locale
 fun CordisApp(viewModel: CordisViewModel = viewModel()) {
     val context = LocalContext.current
     val instances by viewModel.instances.collectAsState()
+    val homeShortcuts by viewModel.homeShortcuts.collectAsState()
     val bootstrapInstallState by viewModel.bootstrapInstallState.collectAsState()
     var pendingDelete by remember { mutableStateOf<CordisInstance?>(null) }
     val actionsEnabled = !bootstrapInstallState.installing
@@ -98,12 +105,25 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                 )
 
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item {
+                        HomeShortcutsPanel(
+                            homeShortcuts = homeShortcuts,
+                            instances = instances,
+                            actionsEnabled = actionsEnabled,
+                            onClickHomeShortcut = viewModel::clickBridgeButton,
+                            onRemoveHomeShortcut = viewModel::removeHomeShortcut,
+                        )
+                    }
                     items(instances, key = { it.id }) { instance ->
                         InstancePanel(
                             instance = instance,
+                            homeShortcuts = homeShortcuts,
                             actionsEnabled = actionsEnabled,
                             onStart = { viewModel.start(instance.id) },
                             onStop = { viewModel.stop(instance.id) },
+                            onClickBridgeButton = { buttonId -> viewModel.clickBridgeButton(instance.id, buttonId) },
+                            onAddHomeShortcut = { button -> viewModel.addHomeShortcut(instance.id, button) },
+                            onRemoveHomeShortcut = { buttonId -> viewModel.removeHomeShortcut(instance.id, buttonId) },
                             onOpenTerminal = { viewModel.openInstanceTerminal(instance.id) },
                             onOpenConsole = {
                                 context.startActivity(
@@ -139,6 +159,119 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
             },
         )
     }
+}
+
+@Composable
+private fun HomeShortcutsPanel(
+    homeShortcuts: List<HomeShortcut>,
+    instances: List<CordisInstance>,
+    actionsEnabled: Boolean,
+    onClickHomeShortcut: (instanceId: String, buttonId: String) -> Unit,
+    onRemoveHomeShortcut: (instanceId: String, buttonId: String) -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Home shortcuts",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (homeShortcuts.isEmpty()) {
+                Text(
+                    text = "Pin instance buttons as shortcuts to show them here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                homeShortcuts.sortedBy(HomeShortcut::sort).forEach { homeShortcut ->
+                    val instance = instances.firstOrNull { it.id == homeShortcut.instanceId }
+                    val button = instance?.bridgeButtons?.firstOrNull { it.id == homeShortcut.buttonId }
+                    HomeShortcutRow(
+                        homeShortcut = homeShortcut,
+                        instance = instance,
+                        button = button,
+                        actionsEnabled = actionsEnabled,
+                        onClick = { onClickHomeShortcut(homeShortcut.instanceId, homeShortcut.buttonId) },
+                        onRemove = { onRemoveHomeShortcut(homeShortcut.instanceId, homeShortcut.buttonId) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeShortcutRow(
+    homeShortcut: HomeShortcut,
+    instance: CordisInstance?,
+    button: CordisButton?,
+    actionsEnabled: Boolean,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val enabled = actionsEnabled &&
+        instance?.bridgeStatus == AndroidBridgeStatus.Connected &&
+        button?.enabled != false &&
+        button != null
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = button?.label ?: homeShortcut.title ?: homeShortcut.buttonId,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = homeShortcutSubtitle(homeShortcut, instance, button),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(onClick = onClick, enabled = enabled) {
+                Text("Run")
+            }
+            IconButton(onClick = onRemove, enabled = actionsEnabled) {
+                Icon(Icons.Default.Delete, contentDescription = "Remove home shortcut")
+            }
+        }
+    }
+}
+
+private fun homeShortcutSubtitle(
+    homeShortcut: HomeShortcut,
+    instance: CordisInstance?,
+    button: CordisButton?,
+): String {
+    if (instance == null) return "Instance was removed"
+    val currentButton = button ?: CordisButton(
+        id = homeShortcut.buttonId,
+        label = homeShortcut.title ?: homeShortcut.buttonId,
+        icon = homeShortcut.icon,
+        description = homeShortcut.description,
+        enabled = homeShortcut.enabled,
+        disabledReason = homeShortcut.disabledReason,
+    )
+    if (button == null && currentButton.description == null && currentButton.enabled) {
+        return "${instance.name} - button is unavailable"
+    }
+    if (!currentButton.enabled) return currentButton.disabledReason ?: "${instance.name} - disabled"
+    return instance.name
 }
 
 @Composable
@@ -190,9 +323,13 @@ private fun Header(
 @OptIn(ExperimentalFoundationApi::class)
 private fun InstancePanel(
     instance: CordisInstance,
+    homeShortcuts: List<HomeShortcut>,
     actionsEnabled: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onClickBridgeButton: (buttonId: String) -> Unit,
+    onAddHomeShortcut: (button: CordisButton) -> Unit,
+    onRemoveHomeShortcut: (buttonId: String) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenConsole: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -294,7 +431,104 @@ private fun InstancePanel(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
+            AndroidBridgePanel(
+                instance = instance,
+                homeShortcuts = homeShortcuts,
+                actionsEnabled = actionsEnabled,
+                onClickBridgeButton = onClickBridgeButton,
+                onAddHomeShortcut = onAddHomeShortcut,
+                onRemoveHomeShortcut = onRemoveHomeShortcut,
+            )
+
             LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
+        }
+    }
+}
+
+@Composable
+private fun AndroidBridgePanel(
+    instance: CordisInstance,
+    homeShortcuts: List<HomeShortcut>,
+    actionsEnabled: Boolean,
+    onClickBridgeButton: (buttonId: String) -> Unit,
+    onAddHomeShortcut: (button: CordisButton) -> Unit,
+    onRemoveHomeShortcut: (buttonId: String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        BridgeStatusText(instance)
+        if (instance.bridgeButtons.isNotEmpty()) {
+            instance.bridgeButtons.forEach { button ->
+                val pinned = homeShortcuts.any { it.instanceId == instance.id && it.buttonId == button.id }
+                BridgeButtonRow(
+                    button = button,
+                    pinned = pinned,
+                    actionsEnabled = actionsEnabled && instance.bridgeStatus == AndroidBridgeStatus.Connected,
+                    onClick = { onClickBridgeButton(button.id) },
+                    onToggleHomeShortcut = {
+                        if (pinned) onRemoveHomeShortcut(button.id) else onAddHomeShortcut(button)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BridgeStatusText(instance: CordisInstance) {
+    if (instance.status != RuntimeStatus.Running || instance.bridgeStatus == AndroidBridgeStatus.Connected) return
+    Text(
+        text = "Cordis Android plugin is not connected. Install and enable cordis-plugin-android in this instance.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun BridgeButtonRow(
+    button: CordisButton,
+    pinned: Boolean,
+    actionsEnabled: Boolean,
+    onClick: () -> Unit,
+    onToggleHomeShortcut: () -> Unit,
+) {
+    val enabled = actionsEnabled && button.enabled
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = button.label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val subtitle = when {
+                button.description != null && button.enabled -> button.description
+                !button.enabled -> button.disabledReason ?: "Disabled"
+                else -> button.id
+            }
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = onClick, enabled = enabled) {
+                Text("Run")
+            }
+            IconButton(onClick = onToggleHomeShortcut, enabled = actionsEnabled) {
+                Icon(
+                    Icons.Default.PushPin,
+                    contentDescription = if (pinned) "Remove from home" else "Pin to home",
+                    tint = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
