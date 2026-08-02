@@ -19,7 +19,7 @@ android {
         ciKeyPassword,
     ).all { !it.isNullOrBlank() }
     val packageVersion = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
-        .find(rootProject.file("plugins/packages/android/package.json").readText())
+        .find(rootProject.file("boilerplate/packages/android/package.json").readText())
         ?.groupValues
         ?.get(1)
         ?: error("Unable to read cordis-plugin-android version")

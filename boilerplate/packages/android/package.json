@@ -24,12 +24,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/clinal/cordis-android.git",
-    "directory": "plugins/packages/android"
+    "directory": "boilerplate/packages/android"
   },
   "bugs": {
     "url": "https://github.com/clinal/cordis-android/issues"
   },
-  "homepage": "https://github.com/clinal/cordis-android/tree/main/plugins/packages/android#readme",
+  "homepage": "https://github.com/clinal/cordis-android/tree/main/boilerplate/packages/android#readme",
   "publishConfig": {
     "access": "public"
   },
