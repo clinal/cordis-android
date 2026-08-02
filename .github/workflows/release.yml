@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - plugins/android/packages/android/package.json
+      - boilerplate/packages/android/package.json
 
 concurrency:
   group: release-main
@@ -30,9 +30,13 @@ jobs:
         env:
           BEFORE_SHA: ${{ github.event.before }}
         run: |
-          package_json=plugins/android/packages/android/package.json
+          package_json=boilerplate/packages/android/package.json
+          previous_package_json=$package_json
+          if ! git cat-file -e "$BEFORE_SHA:$previous_package_json" 2>/dev/null; then
+            previous_package_json=plugins/android/packages/android/package.json
+          fi
           version=$(jq -r .version "$package_json")
-          previous_version=$(git show "$BEFORE_SHA:$package_json" | jq -r .version)
+          previous_version=$(git show "$BEFORE_SHA:$previous_package_json" | jq -r .version)
 
           node -e 'const v = process.argv[1]; if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(v)) process.exit(1)' "$version"
 
@@ -61,7 +65,7 @@ jobs:
       id-token: write
     defaults:
       run:
-        working-directory: plugins/android
+        working-directory: boilerplate
 
     steps:
       - name: Checkout
@@ -72,20 +76,21 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: plugins/android/package-lock.json
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --no-immutable
 
       - name: Type-check
-        run: npm run typecheck
+        run: yarn workspace cordis-plugin-android typecheck
 
       - name: Build
-        run: npm run build
+        run: yarn build
 
       - name: Publish
-        run: npm publish --workspace cordis-plugin-android --access public --provenance
+        run: npm publish ./packages/android --access public --provenance
 
   apk:
     name: Publish signed APK
