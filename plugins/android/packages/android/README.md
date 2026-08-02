@@ -24,17 +24,6 @@ button.patch({ enabled: false, disabledReason: 'Busy' })
 button.dispose()
 ```
 
-For non-Android development, enable the debug web UI:
-
-```ts
-export default {
-  plugins: {
-    'cordis-plugin-android': {
-      debug: { enabled: true, port: 39140 },
-    },
-  },
-}
-```
-
-Open `http://127.0.0.1:39140` to view and trigger registered buttons without
-running inside `cordis-android`.
+For non-Android development, open this plugin in Cordis WebUI and click the
+**调试** button. The dialog lists and triggers registered buttons without running
+inside `cordis-android`.

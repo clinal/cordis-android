@@ -1,2 +1,4 @@
 dist/
+lib/
+.tsbuildinfo
 node_modules/

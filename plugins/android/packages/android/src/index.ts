@@ -1,5 +1,5 @@
 import type { Context as BaseContext } from 'cordis'
-import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http'
+import type { Entry, WebUI } from '@cordisjs/plugin-webui'
 import { Socket, createConnection } from 'node:net'
 
 declare module 'cordis' {
@@ -11,16 +11,10 @@ declare module 'cordis' {
 export const name = 'cordis-plugin-android'
 
 const PROTOCOL = 'cordis.android.bridge.v1'
-const DEFAULT_DEBUG_PORT = 39140
 const DEFAULT_RECONNECT_INTERVAL = 3000
 
 export interface Config {
   reconnectInterval?: number
-  debug?: {
-    enabled?: boolean
-    host?: string
-    port?: number
-  }
 }
 
 export interface InstanceInfo {
@@ -71,7 +65,19 @@ type CordisContext = BaseContext & {
     warn(format: unknown, ...params: unknown[]): void
   }
   effect(effect: () => () => void, label?: string): () => unknown
+  inject(deps: string[], callback: (ctx: BaseContext & { webui: WebUI }) => void | (() => void)): unknown
   provide(name: string, value: unknown): () => unknown
+}
+
+interface DebugData {
+  buttons: ButtonDef[]
+}
+
+declare module '@cordisjs/plugin-webui' {
+  interface Events {
+    'android.debug.buttons'(): ButtonDef[]
+    'android.debug.trigger'(buttonId: string): Promise<void>
+  }
 }
 
 interface JsonRpcRequest {
@@ -101,13 +107,13 @@ export class AndroidBridge {
   private buffer = ''
   private requestId = 0
   private reconnectTimer: NodeJS.Timeout | undefined
-  private debugServer: Server | undefined
+  private debugEntry: Entry<DebugData> | undefined
   private connected = false
 
   constructor(private readonly ctx: CordisContext, private config: Config = {}) {
     this.reconnectInterval = config.reconnectInterval ?? DEFAULT_RECONNECT_INTERVAL
     this.connect()
-    this.startDebugServer()
+    this.setupDebugUI()
   }
 
   instance(): Promise<InstanceInfo> {
@@ -135,6 +141,7 @@ export class AndroidBridge {
     const registered = new RegisteredButton(this, normalized, handler)
     this.buttons.set(normalized.id, registered)
     this.sendNotification('button.register', { button: normalized })
+    this.refreshDebugUI()
 
     this.ctx.effect(() => () => registered.dispose(), `android.button(${JSON.stringify(normalized.id)})`)
     return registered
@@ -157,6 +164,7 @@ export class AndroidBridge {
 
   updateButton(def: ButtonDef): void {
     this.buttons.set(def.id, new RegisteredButton(this, def, this.buttons.get(def.id)?.handler ?? (() => {})))
+    this.refreshDebugUI()
   }
 
   patchButton(id: string, patch: ButtonPatch): void {
@@ -164,6 +172,7 @@ export class AndroidBridge {
     if (!button) return
     button.def = normalizeButton({ ...button.def, ...patch, id })
     this.sendNotification('button.patch', { id, patch })
+    this.refreshDebugUI()
   }
 
   unregisterButton(id: string, notifyHost = true): void {
@@ -171,6 +180,7 @@ export class AndroidBridge {
     if (!button) return
     this.buttons.delete(id)
     if (notifyHost) this.sendNotification('button.unregister', { id })
+    this.refreshDebugUI()
   }
 
   private connect(): void {
@@ -293,37 +303,28 @@ export class AndroidBridge {
     this.socket?.write(`${JSON.stringify(message)}\n`)
   }
 
-  private startDebugServer(): void {
-    const debug = this.config.debug
-    if (!debug?.enabled) return
-    const host = debug.host ?? '127.0.0.1'
-    const port = debug.port ?? DEFAULT_DEBUG_PORT
-    this.debugServer = createServer((request, response) => this.handleDebugRequest(request, response))
-    this.debugServer.listen(port, host, () => {
-      this.ctx.logger.info(`Android bridge debug UI: http://${host}:${port}`)
+  private setupDebugUI(): void {
+    this.ctx.inject(['webui'], (ctx) => {
+      this.debugEntry = ctx.webui.addEntry({
+        path: 'cordis-plugin-android/dist',
+        base: import.meta.url,
+        dev: '../client/index.ts',
+        prod: '../dist/manifest.json',
+      }, () => ({ buttons: this.listButtons() }))
+      ctx.webui.addListener('android.debug.buttons', () => this.listButtons())
+      ctx.webui.addListener('android.debug.trigger', (buttonId: string) => this.trigger(buttonId))
+      return () => {
+        this.debugEntry = undefined
+      }
     })
   }
 
-  private handleDebugRequest(request: IncomingMessage, response: ServerResponse): void {
-    const url = new URL(request.url || '/', 'http://127.0.0.1')
-    if (request.method === 'GET' && url.pathname === '/api/buttons') {
-      sendJson(response, this.listButtons())
-      return
-    }
-    if (request.method === 'POST' && url.pathname.startsWith('/api/buttons/') && url.pathname.endsWith('/click')) {
-      const id = decodeURIComponent(url.pathname.slice('/api/buttons/'.length, -'/click'.length))
-      this.trigger(id)
-        .then(() => sendJson(response, { ok: true }))
-        .catch(error => sendJson(response, { ok: false, error: error instanceof Error ? error.message : String(error) }, 500))
-      return
-    }
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    response.end(renderDebugPage())
+  private refreshDebugUI(): void {
+    this.debugEntry?.patch({ buttons: this.listButtons() })
   }
 
   dispose(): void {
     clearTimeout(this.reconnectTimer)
-    this.debugServer?.close()
     this.socket?.destroy()
     this.buttons.clear()
     this.pending.clear()
@@ -358,56 +359,6 @@ function normalizeButton(def: ButtonDef): ButtonDef {
     label: def.label || def.id,
     enabled: def.enabled ?? true,
   }
-}
-
-function sendJson(response: ServerResponse, body: unknown, status = 200): void {
-  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
-  response.end(JSON.stringify(body))
-}
-
-function renderDebugPage(): string {
-  return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cordis Android</title>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; color: #17202a; }
-    main { max-width: 760px; margin: 0 auto; }
-    button { margin-left: 1rem; }
-    li { margin: .75rem 0; }
-    small { color: #5f6b76; display: block; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Cordis Android</h1>
-    <ul id="buttons"></ul>
-  </main>
-  <script>
-    async function load() {
-      const buttons = await fetch('/api/buttons').then(r => r.json())
-      document.querySelector('#buttons').innerHTML = buttons.map(button => {
-        const disabled = button.enabled === false ? 'disabled' : ''
-        return '<li><strong>' + escapeHtml(button.label) + '</strong>' +
-          '<small>' + escapeHtml(button.description || button.id) + '</small>' +
-          '<button ' + disabled + ' data-id="' + encodeURIComponent(button.id) + '">Trigger</button></li>'
-      }).join('') || '<li>No buttons registered.</li>'
-      document.querySelectorAll('button[data-id]').forEach(button => {
-        button.onclick = () => fetch('/api/buttons/' + button.dataset.id + '/click', { method: 'POST' })
-      })
-    }
-    function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, char => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-      })[char])
-    }
-    load()
-    setInterval(load, 3000)
-  </script>
-</body>
-</html>`
 }
 
 export function apply(ctx: CordisContext, config: Config = {}): void {

@@ -1,19 +1,20 @@
 {
   "name": "cordis-plugin-android",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Cordis plugin for communicating with the cordis-android host.",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./client": "./client/index.ts"
   },
   "files": [
-    "dist/index.js",
-    "dist/index.d.ts"
+    "lib",
+    "dist"
   ],
   "keywords": [
     "cordis",
@@ -33,14 +34,33 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run typecheck && npm run build"
   },
   "peerDependencies": {
+    "@cordisjs/plugin-webui": "^0.3.1",
     "cordis": ">=4.0.0-rc.7"
   },
+  "peerDependenciesMeta": {
+    "@cordisjs/plugin-webui": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@cordisjs/client": "0.3.1",
+    "@cordisjs/plugin-manager": "0.5.1",
+    "@cordisjs/plugin-webui": "0.3.1",
     "cordis": "4.0.0-rc.7"
+  },
+  "cordis": {
+    "public": [
+      "dist"
+    ],
+    "service": {
+      "optional": [
+        "webui"
+      ]
+    }
   }
 }
