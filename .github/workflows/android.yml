@@ -27,6 +27,8 @@ jobs:
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+            extra-substituters = https://nix-on-droid.cachix.org
+            extra-trusted-public-keys = nix-on-droid.cachix.org-1:56snoMJTXmDRC1Ei24CmKoUqvHJ9XCp+nidK7qkMQrU=
 
       - name: Enable Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@main
@@ -61,3 +63,55 @@ jobs:
           name: cordis-android-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  e2e:
+    name: Compose e2e
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CORDIS_ANDROID_KEYSTORE_BASE64: ${{ secrets.CORDIS_ANDROID_KEYSTORE_BASE64 }}
+      CORDIS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CORDIS_ANDROID_KEYSTORE_PASSWORD }}
+      CORDIS_ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/ci-signing/cordis-ci.jks
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            extra-substituters = https://nix-on-droid.cachix.org
+            extra-trusted-public-keys = nix-on-droid.cachix.org-1:56snoMJTXmDRC1Ei24CmKoUqvHJ9XCp+nidK7qkMQrU=
+
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Configure Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Build x86_64 bootstrap assets
+        run: nix build ./bootstrap#x86_64 -o result
+
+      - name: Prepare CI signing key
+        if: env.CORDIS_ANDROID_KEYSTORE_BASE64 != ''
+        run: |
+          mkdir -p "$(dirname "$CORDIS_ANDROID_KEYSTORE_FILE")"
+          printf '%s' "$CORDIS_ANDROID_KEYSTORE_BASE64" | base64 -d > "$CORDIS_ANDROID_KEYSTORE_FILE"
+
+      - name: Enable KVM access
+        run: sudo chown "$USER" /dev/kvm
+
+      - name: Run Compose e2e tests
+        run: nix run .#emulated-connected-android-test -- -PcordisBootstrapAssetsDir=result --build-cache
