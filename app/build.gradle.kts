@@ -18,13 +18,18 @@ android {
         ciKeystorePassword,
         ciKeyPassword,
     ).all { !it.isNullOrBlank() }
+    val packageVersion = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
+        .find(rootProject.file("plugins/android/packages/android/package.json").readText())
+        ?.groupValues
+        ?.get(1)
+        ?: error("Unable to read cordis-plugin-android version")
 
     defaultConfig {
         applicationId = "io.github.clinal.cordis"
         minSdk = 28
         targetSdk = 28
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = System.getenv("CORDIS_ANDROID_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("CORDIS_ANDROID_VERSION_NAME") ?: packageVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -68,6 +73,10 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    lint {
+        disable += "ExpiredTargetSdkVersion"
     }
 
     val bootstrapAssetsDir = providers.gradleProperty("cordisBootstrapAssetsDir")
