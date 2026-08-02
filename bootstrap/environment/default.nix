@@ -1,23 +1,23 @@
-{ pkgs, buildEnv, callPackage, lib, inputs, full ? false }:
+{ pkgs, buildEnv, callPackage, lib, inputs, full ? false, runtimeSystem ? "aarch64-linux" }:
 
 let
-  aarch64-pkgs = import inputs.nixpkgs { system = "aarch64-linux"; };
-  aarch64-node-pkgs = import inputs.node-pkgs { system = "aarch64-linux"; };
+  runtime-pkgs = import inputs.nixpkgs { system = runtimeSystem; };
+  runtime-node-pkgs = import inputs.node-pkgs { system = runtimeSystem; };
   login = callPackage ./login.nix { };
-  env = callPackage ./env.nix { inherit (aarch64-pkgs) busybox; };
+  env = callPackage ./env.nix { inherit (runtime-pkgs) busybox; };
   certs = callPackage ./certs.nix { };
   fonts = callPackage ./fonts.nix { };
   timezone = callPackage ./timezone.nix { };
 in
 buildEnv {
   name = "cordis-env";
-  paths = with aarch64-pkgs; [
+  paths = with runtime-pkgs; [
     login
     env
     certs
     busybox
     zip
-    aarch64-node-pkgs.nodejs-slim_26
+    runtime-node-pkgs.nodejs-slim_26
   ] ++ (lib.optionals full [
     fonts
     chromium

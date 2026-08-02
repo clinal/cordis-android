@@ -1,7 +1,7 @@
-{ pkgs, callPackage, lib, inputs, full ? false, ... }:
+{ pkgs, callPackage, lib, inputs, full ? false, runtimeSystem ? "aarch64-linux", prootTermux ? pkgs.prootTermux, ... }:
 
 let
-  env = callPackage ./environment { inherit full inputs; };
+  env = callPackage ./environment { inherit full inputs runtimeSystem; };
   closureInfo = pkgs.closureInfo { rootPaths = [ env ]; };
   bootstrap = pkgs.runCommand "cordis-bootstrap-root" { } ''
     mkdir -p $out/nix/store
@@ -9,7 +9,7 @@ let
       cp -r "$storePath" "$out/nix/store"
     done < ${closureInfo}/store-paths
 
-    cp ${pkgs.prootTermux}/bin/proot-static $out/proot-static
+    cp ${prootTermux}/bin/proot-static $out/proot-static
     chmod -R u+w $out/nix $out/proot-static
 
     find $out -executable -type f | sed "s@^$out/@@" > $out/EXECUTABLES.txt
