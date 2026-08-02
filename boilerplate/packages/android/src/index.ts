@@ -9,7 +9,7 @@ declare module 'cordis' {
   }
 }
 
-export const name = 'cordis-plugin-android'
+export const name = 'android'
 
 const PROTOCOL = 'cordis.android.bridge.v1'
 const DEFAULT_RECONNECT_INTERVAL = 3000
