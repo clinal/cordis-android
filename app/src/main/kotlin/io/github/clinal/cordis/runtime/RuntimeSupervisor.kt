@@ -72,12 +72,13 @@ class RuntimeSupervisor(
                 }
                 val command = commandBuilder.cordisCommand(
                     instanceId = instanceId,
-                    environment = mapOf("CORDIS_DNS" to dns) + bridgeServer.environment,
+                    environment = bridgeServer.environment,
                 )
                 val process = ProcessBuilder(command)
                     .redirectErrorStream(true)
                     .also { builder ->
                         builder.environment()["PROOT_TMP_DIR"] = RuntimePaths(appContext).tmp.absolutePath
+                        builder.environment()["CORDIS_DNS"] = dns
                     }
                     .start()
                 processes[instanceId] = process
