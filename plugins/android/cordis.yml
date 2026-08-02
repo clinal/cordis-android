@@ -1,0 +1,30 @@
+- id: timer
+  name: '@cordisjs/plugin-timer'
+- id: http
+  name: '@cordisjs/plugin-http'
+- id: socks
+  name: '@cordisjs/plugin-http-socks'
+- id: server
+  name: '@cordisjs/plugin-server'
+  config:
+    port: 3140
+- id: webui
+  label: WebUI
+  name: cordis/group
+  config:
+    - id: webui
+      name: '@cordisjs/plugin-webui'
+    - id: insight
+      name: '@cordisjs/plugin-insight'
+    - id: manager
+      name: '@cordisjs/plugin-manager'
+    - id: notifier
+      name: '@cordisjs/plugin-notifier'
+    - id: logger
+      name: '@cordisjs/plugin-logger-webui'
+- id: development
+  label: Development
+  name: cordis/group
+  config:
+    - id: hmr
+      name: '@cordisjs/plugin-hmr'
