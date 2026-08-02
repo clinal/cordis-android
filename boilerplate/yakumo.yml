@@ -4,7 +4,9 @@
       build:
         - tsc
         - esbuild
+        - client
       clean:
         - tsc --clean
 - name: yakumo-esbuild
 - name: yakumo-tsc
+- name: '@cordisjs/client/yakumo'
