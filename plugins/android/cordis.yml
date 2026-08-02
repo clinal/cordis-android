@@ -1,3 +1,5 @@
+- id: logger
+  name: '@cordisjs/plugin-logger-console'
 - id: timer
   name: '@cordisjs/plugin-timer'
 - id: http
@@ -9,22 +11,16 @@
   config:
     port: 3140
 - id: webui
-  label: WebUI
-  name: cordis/group
+  name: '@cordisjs/plugin-webui'
   config:
-    - id: webui
-      name: '@cordisjs/plugin-webui'
-    - id: insight
-      name: '@cordisjs/plugin-insight'
-    - id: manager
-      name: '@cordisjs/plugin-manager'
-    - id: notifier
-      name: '@cordisjs/plugin-notifier'
-    - id: logger
-      name: '@cordisjs/plugin-logger-webui'
+    apiPath: /api
+- id: insight
+  name: '@cordisjs/plugin-insight'
+- id: loader-webui
+  name: '@cordisjs/plugin-loader-webui'
+- id: notifier
+  name: '@cordisjs/plugin-notifier'
+- id: logger-webui
+  name: '@cordisjs/plugin-logger-webui'
 - id: development
-  label: Development
-  name: cordis/group
-  config:
-    - id: hmr
-      name: '@cordisjs/plugin-hmr'
+  name: '@cordisjs/plugin-hmr'
