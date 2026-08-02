@@ -32,7 +32,8 @@
 </template>
 
 <script setup lang="ts">
-import { message, send, useContext, useRpc } from '@cordisjs/client'
+import { message, useContext, useRpc } from '@cordisjs/client'
+import type {} from '@cordisjs/plugin-loader-webui/client'
 import { computed, ref } from 'vue'
 import type { ButtonDef } from '../src'
 
@@ -40,13 +41,7 @@ interface DebugData {
   buttons: ButtonDef[]
 }
 
-interface ManagerContext {
-  manager: {
-    currentEntry?: { name: string }
-  }
-}
-
-const ctx = useContext() as ReturnType<typeof useContext> & ManagerContext
+const ctx = useContext()
 const data = useRpc<DebugData>()
 const visible = ref(false)
 const loading = ref(false)
@@ -57,7 +52,7 @@ const isCurrentPlugin = computed(() => ctx.manager.currentEntry?.name === 'cordi
 async function refresh() {
   loading.value = true
   try {
-    buttons.value = await send('android.debug.buttons')
+    buttons.value = data.value.buttons
   } finally {
     loading.value = false
   }
@@ -72,7 +67,7 @@ async function open() {
 async function trigger(id: string) {
   triggering.value = id
   try {
-    await send('android.debug.trigger', id)
+    await data.value.trigger(id)
     message.success('按钮已触发。')
   } catch (error) {
     message.error(error instanceof Error ? error.message : String(error))

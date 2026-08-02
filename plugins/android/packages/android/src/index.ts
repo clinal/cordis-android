@@ -1,5 +1,6 @@
 import type { Context as BaseContext } from 'cordis'
-import type { Entry, WebUI } from '@cordisjs/plugin-webui'
+import type WebUI from '@cordisjs/plugin-webui/base'
+import type { Entry } from '@cordisjs/plugin-webui/base'
 import { Socket, createConnection } from 'node:net'
 
 declare module 'cordis' {
@@ -71,13 +72,7 @@ type CordisContext = BaseContext & {
 
 interface DebugData {
   buttons: ButtonDef[]
-}
-
-declare module '@cordisjs/plugin-webui' {
-  interface Events {
-    'android.debug.buttons'(): ButtonDef[]
-    'android.debug.trigger'(buttonId: string): Promise<void>
-  }
+  trigger(buttonId: string): Promise<void>
 }
 
 interface JsonRpcRequest {
@@ -305,14 +300,14 @@ export class AndroidBridge {
 
   private setupDebugUI(): void {
     this.ctx.inject(['webui'], (ctx) => {
-      this.debugEntry = ctx.webui.addEntry({
-        path: 'cordis-plugin-android/dist',
-        base: import.meta.url,
-        dev: '../client/index.ts',
-        prod: '../dist/manifest.json',
-      }, () => ({ buttons: this.listButtons() }))
-      ctx.webui.addListener('android.debug.buttons', () => this.listButtons())
-      ctx.webui.addListener('android.debug.trigger', (buttonId: string) => this.trigger(buttonId))
+      this.debugEntry = ctx.webui.addEntry<DebugData>({
+        baseUrl: import.meta.url,
+        source: '../client/index.ts',
+        manifest: '../dist/manifest.json',
+      }, {
+        buttons: this.listButtons(),
+        trigger: (buttonId: string) => this.trigger(buttonId),
+      })
       return () => {
         this.debugEntry = undefined
       }
@@ -320,7 +315,9 @@ export class AndroidBridge {
   }
 
   private refreshDebugUI(): void {
-    this.debugEntry?.patch({ buttons: this.listButtons() })
+    this.debugEntry?.mutate((data: DebugData) => {
+      data.buttons = this.listButtons()
+    })
   }
 
   dispose(): void {
