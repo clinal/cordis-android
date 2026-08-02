@@ -29,6 +29,7 @@ class RuntimeSupervisor(
     private val stoppingInstances = ConcurrentHashMap.newKeySet<String>()
     private val deletingInstances = ConcurrentHashMap.newKeySet<String>()
     private val startJobs = ConcurrentHashMap<String, Job>()
+    private val bridgeServers = ConcurrentHashMap<String, AndroidBridgeServer>()
 
     fun restoreAutoStartedInstances() {
         instanceRepository.autoStartInstanceIds().forEach(::start)
@@ -65,12 +66,18 @@ class RuntimeSupervisor(
                 val dns = instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }
 
                 instanceRepository.appendLog(instanceId, "Starting Cordis with yarn start.")
-                val command = commandBuilder.cordisCommand(instanceId)
+                val bridgeServer = AndroidBridgeServer(instanceId, instanceRepository, scope).also { bridge ->
+                    bridgeServers[instanceId] = bridge
+                    bridge.start()
+                }
+                val command = commandBuilder.cordisCommand(
+                    instanceId = instanceId,
+                    environment = mapOf("CORDIS_DNS" to dns) + bridgeServer.environment,
+                )
                 val process = ProcessBuilder(command)
                     .redirectErrorStream(true)
                     .also { builder ->
                         builder.environment()["PROOT_TMP_DIR"] = RuntimePaths(appContext).tmp.absolutePath
-                        builder.environment()["CORDIS_DNS"] = dns
                     }
                     .start()
                 processes[instanceId] = process
@@ -108,6 +115,7 @@ class RuntimeSupervisor(
             } finally {
                 processes.remove(instanceId)
                 prootPids.remove(instanceId)
+                bridgeServers.remove(instanceId)?.stop()
                 stoppingInstances.remove(instanceId)
                 activeStarts.remove(instanceId)
                 startJobs.remove(instanceId)
@@ -123,6 +131,11 @@ class RuntimeSupervisor(
         scope.launch {
             stopProcess(instanceId)
         }
+    }
+
+    fun clickBridgeButton(instanceId: String, buttonId: String) {
+        bridgeServers[instanceId]?.click(buttonId)
+            ?: instanceRepository.appendLog(instanceId, "Android bridge is not connected; cannot trigger button $buttonId.")
     }
 
     fun remove(instanceId: String) {
