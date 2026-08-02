@@ -24,12 +24,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/clinal/cordis-android.git",
-    "directory": "plugins/android/packages/android"
+    "directory": "plugins/packages/android"
   },
   "bugs": {
     "url": "https://github.com/clinal/cordis-android/issues"
   },
-  "homepage": "https://github.com/clinal/cordis-android/tree/main/plugins/android/packages/android#readme",
+  "homepage": "https://github.com/clinal/cordis-android/tree/main/plugins/packages/android#readme",
   "publishConfig": {
     "access": "public"
   },
@@ -49,7 +49,9 @@
   },
   "devDependencies": {
     "@cordisjs/client": "0.8.2",
+    "@cordisjs/plugin-loader": "1.0.0-rc.5",
     "@cordisjs/plugin-loader-webui": "0.10.1",
+    "@cordisjs/plugin-timer": "1.1.2",
     "@cordisjs/plugin-webui": "0.8.2",
     "cordis": "4.0.0-rc.7"
   },
