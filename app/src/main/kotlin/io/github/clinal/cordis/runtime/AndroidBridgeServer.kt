@@ -201,7 +201,7 @@ class AndroidBridgeServer(
                 waitLock.notifyAll()
             }
         }
-        write(
+        val sent = write(
             currentWriter,
             JSONObject()
                 .put("jsonrpc", "2.0")
@@ -209,6 +209,10 @@ class AndroidBridgeServer(
                 .put("method", method)
                 .put("params", params),
         )
+        if (!sent) {
+            pendingResponses.remove(id)
+            return null
+        }
         synchronized(waitLock) {
             if (response == null) waitLock.wait(REQUEST_TIMEOUT_MS)
         }
@@ -240,11 +244,20 @@ class AndroidBridgeServer(
         }
     }
 
-    private suspend fun write(currentWriter: BufferedWriter, message: JSONObject) {
-        writeMutex.withLock {
-            currentWriter.write(message.toString())
-            currentWriter.newLine()
-            currentWriter.flush()
+    private suspend fun write(currentWriter: BufferedWriter, message: JSONObject): Boolean {
+        return try {
+            writeMutex.withLock {
+                currentWriter.write(message.toString())
+                currentWriter.newLine()
+                currentWriter.flush()
+            }
+            true
+        } catch (error: IOException) {
+            Log.d(TAG, "Android bridge write failed for instance: $instanceId", error)
+            if (writer == currentWriter) {
+                runCatching { clientSocket?.close() }
+            }
+            false
         }
     }
 

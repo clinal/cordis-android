@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -336,10 +340,35 @@ private fun InstancePanel(
     onRemove: () -> Unit,
 ) {
     var autoScroll by remember(instance.id) { mutableStateOf(true) }
+    var logSelectionKey by remember(instance.id) { mutableStateOf(0) }
 
     Card(
         modifier = Modifier
             .testTag("cordis.instance.${instance.id}")
+            .pointerInput(instance.id) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial,
+                    )
+                    var isTap = true
+                    var change = down
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                            isTap = false
+                        }
+                    } while (change.pressed)
+
+                    if (
+                        isTap &&
+                        change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
+                    ) {
+                        logSelectionKey++
+                    }
+                }
+            }
             .combinedClickable(
                 enabled = actionsEnabled,
                 onClick = {},
@@ -440,7 +469,9 @@ private fun InstancePanel(
                 onRemoveHomeShortcut = onRemoveHomeShortcut,
             )
 
-            LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
+            key(logSelectionKey) {
+                LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
+            }
         }
     }
 }
@@ -694,23 +725,33 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
         }
     }
 
-    SelectionContainer {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .background(Color(0xFF101418))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            items(visibleLines) { line ->
-                Text(
-                    text = line,
-                    color = Color(0xFFE6EDF3),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                )
+    Box(
+        modifier = Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent().changes.forEach { change -> change.consume() }
+                }
+            }
+        },
+    ) {
+        SelectionContainer {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .background(Color(0xFF101418))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(visibleLines) { line ->
+                    Text(
+                        text = line,
+                        color = Color(0xFFE6EDF3),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
             }
         }
     }
