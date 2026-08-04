@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -339,16 +340,10 @@ private fun InstancePanel(
     onRemove: () -> Unit,
 ) {
     var autoScroll by remember(instance.id) { mutableStateOf(true) }
+    var logSelectionKey by remember(instance.id) { mutableStateOf(0) }
 
     Card(
-        modifier = Modifier
-            .testTag("cordis.instance.${instance.id}")
-            .combinedClickable(
-                enabled = actionsEnabled,
-                onClick = {},
-                onLongClick = onRemove,
-                onLongClickLabel = "Remove ${instance.name}",
-            ),
+        modifier = Modifier.testTag("cordis.instance.${instance.id}"),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -358,96 +353,110 @@ private fun InstancePanel(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        enabled = actionsEnabled,
+                        onClick = { logSelectionKey++ },
+                        onLongClick = onRemove,
+                        onLongClickLabel = "Remove ${instance.name}",
+                    ),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = instance.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (instance.hasWebService) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = instance.consoleUrl,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = instance.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (instance.hasWebService) {
+                            Text(
+                                text = instance.consoleUrl,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
+                    StatusChip(instance.status)
                 }
-                StatusChip(instance.status)
-            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { autoScroll = !autoScroll }, enabled = actionsEnabled) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (autoScroll) {
-                            "Disable ${instance.name} log auto-scroll"
-                        } else {
-                            "Enable ${instance.name} log auto-scroll"
-                        },
-                        tint = if (autoScroll) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                    )
-                }
-                if (instance.hasWebService) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { autoScroll = !autoScroll }, enabled = actionsEnabled) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (autoScroll) {
+                                "Disable ${instance.name} log auto-scroll"
+                            } else {
+                                "Enable ${instance.name} log auto-scroll"
+                            },
+                            tint = if (autoScroll) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
+                    if (instance.hasWebService) {
+                        IconButton(
+                            onClick = onOpenConsole,
+                            enabled = actionsEnabled && instance.status == RuntimeStatus.Running,
+                        ) {
+                            Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
+                        }
+                    }
+                    IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
+                        Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
+                    }
                     IconButton(
-                        onClick = onOpenConsole,
-                        enabled = actionsEnabled && instance.status == RuntimeStatus.Running,
+                        modifier = Modifier.testTag("cordis.instance.${instance.id}.start"),
+                        onClick = onStart,
+                        enabled = actionsEnabled && instance.status.canStart,
                     ) {
-                        Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
+                    }
+                    IconButton(
+                        modifier = Modifier.testTag("cordis.instance.${instance.id}.stop"),
+                        onClick = onStop,
+                        enabled = actionsEnabled,
+                    ) {
+                        Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
+                    }
+                    IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
+                        Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
                     }
                 }
-                IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
-                    Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
+
+                if (instance.status == RuntimeStatus.Starting) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
-                IconButton(
-                    modifier = Modifier.testTag("cordis.instance.${instance.id}.start"),
-                    onClick = onStart,
-                    enabled = actionsEnabled && instance.status.canStart,
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
-                }
-                IconButton(
-                    modifier = Modifier.testTag("cordis.instance.${instance.id}.stop"),
-                    onClick = onStop,
-                    enabled = actionsEnabled,
-                ) {
-                    Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
-                }
-                IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
-                    Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
-                }
+
+                AndroidBridgePanel(
+                    instance = instance,
+                    homeShortcuts = homeShortcuts,
+                    actionsEnabled = actionsEnabled,
+                    onClickBridgeButton = onClickBridgeButton,
+                    onAddHomeShortcut = onAddHomeShortcut,
+                    onRemoveHomeShortcut = onRemoveHomeShortcut,
+                )
             }
 
-            if (instance.status == RuntimeStatus.Starting) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            key(logSelectionKey) {
+                LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
             }
-
-            AndroidBridgePanel(
-                instance = instance,
-                homeShortcuts = homeShortcuts,
-                actionsEnabled = actionsEnabled,
-                onClickBridgeButton = onClickBridgeButton,
-                onAddHomeShortcut = onAddHomeShortcut,
-                onRemoveHomeShortcut = onRemoveHomeShortcut,
-            )
-
-            LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
         }
     }
 }
