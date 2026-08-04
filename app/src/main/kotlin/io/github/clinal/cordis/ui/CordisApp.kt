@@ -690,9 +690,9 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
 
     LaunchedEffect(autoScroll, lines.size) {
         if (autoScroll && visibleLineCount > 0) {
-            // A new process line can arrive before the previous scroll animation finishes.
-            // Jumping to the tail avoids continuously cancelling and restarting animations.
-            listState.scrollToItem(visibleLineCount - 1)
+            // Schedule the tail position for the next remeasure. A synchronous scroll can
+            // collide with Compose's current measure/layout pass when a process starts.
+            listState.requestScrollToItem(visibleLineCount - 1)
         }
     }
 
