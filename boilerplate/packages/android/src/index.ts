@@ -27,6 +27,24 @@ export interface RuntimeInfo {
   protocol: string
 }
 
+export interface CommandResult {
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+export interface Screenshot {
+  mimeType: 'image/png'
+  base64: string
+}
+
+export interface DeviceInfo {
+  width?: number
+  height?: number
+  density?: number
+  currentPackage?: string
+}
+
 export interface ButtonDef {
   id: string
   label: string
@@ -122,6 +140,70 @@ export class AndroidBridge {
       connected: this.connected,
       protocol: PROTOCOL,
     })
+  }
+
+  execute(command: string): Promise<CommandResult> {
+    if (process.env.CORDIS_ANDROID_CONTROL_ENABLED !== 'true') {
+      return Promise.reject(new Error('Android control is not enabled for this Cordis instance'))
+    }
+    if (!command.trim()) return Promise.reject(new Error('Android control command must not be empty'))
+    return this.request('control.execute', { command }).then(result => result as CommandResult)
+  }
+
+  tap(x: number, y: number): Promise<CommandResult> {
+    return this.execute(`input tap ${integer(x, 'x')} ${integer(y, 'y')}`)
+  }
+
+  swipe(x1: number, y1: number, x2: number, y2: number, duration = 300): Promise<CommandResult> {
+    return this.execute(
+      `input swipe ${integer(x1, 'x1')} ${integer(y1, 'y1')} ${integer(x2, 'x2')} ${integer(y2, 'y2')} ${integer(duration, 'duration')}`,
+    )
+  }
+
+  key(keyCode: number): Promise<CommandResult> {
+    return this.execute(`input keyevent ${integer(keyCode, 'keyCode')}`)
+  }
+
+  async screenshot(): Promise<Screenshot> {
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const path = `/data/local/tmp/cordis-android-${suffix}.png.b64`
+    try {
+      const capture = await this.execute(`screencap -p | base64 > ${path} && wc -c < ${path}`)
+      ensureSuccess(capture, 'capture Android screenshot')
+      const size = Number(capture.stdout.trim().split(/\s+/).at(-1))
+      if (!Number.isSafeInteger(size) || size <= 0) throw new Error('Android screenshot is empty')
+
+      const chunks: string[] = []
+      for (let offset = 0; offset < size; offset += SCREENSHOT_CHUNK_SIZE) {
+        const length = Math.min(SCREENSHOT_CHUNK_SIZE, size - offset)
+        const chunk = await this.execute(
+          `dd if=${path} bs=1 skip=${offset} count=${length} 2>/dev/null`,
+        )
+        ensureSuccess(chunk, 'read Android screenshot')
+        chunks.push(chunk.stdout.replace(/\s/g, ''))
+      }
+      return { mimeType: 'image/png', base64: chunks.join('') }
+    } finally {
+      await this.execute(`rm -f ${path}`).catch(() => {})
+    }
+  }
+
+  async deviceInfo(): Promise<DeviceInfo> {
+    const result = await this.execute(
+      "wm size; wm density; dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' | head -n 1",
+    )
+    ensureSuccess(result, 'read Android device information')
+    const sizes = [...result.stdout.matchAll(/(?:Physical|Override) size:\s*(\d+)x(\d+)/g)]
+    const size = sizes.at(-1)
+    const densities = [...result.stdout.matchAll(/(?:Physical|Override) density:\s*(\d+)/g)]
+    const density = densities.at(-1)
+    const currentPackage = result.stdout.match(/([\w]+(?:\.[\w]+)+)\/[^\s}]+/)?.[1]
+    return {
+      width: size ? Number(size[1]) : undefined,
+      height: size ? Number(size[2]) : undefined,
+      density: density ? Number(density[1]) : undefined,
+      currentPackage,
+    }
   }
 
   listButtons(): ButtonDef[] {
@@ -273,7 +355,18 @@ export class AndroidBridge {
   }
 
   private request(method: string, params: unknown): Promise<unknown> {
-    if (!this.socket || this.socket.destroyed) return Promise.reject(new Error('Android bridge is not connected'))
+    if (!this.socket) {
+      const configured = Boolean(process.env.CORDIS_ANDROID_SOCKET)
+      return Promise.reject(new Error(
+        `Android bridge socket is unavailable (configured=${configured}, handshake=${this.connected}). ` +
+        'Check the Cordis instance log and restart the instance if the plugin has not reconnected.',
+      ))
+    }
+    if (this.socket.destroyed) {
+      return Promise.reject(new Error(
+        `Android bridge socket was closed (handshake=${this.connected}). Waiting for the plugin to reconnect.`,
+      ))
+    }
     const id = ++this.requestId
     this.send({ jsonrpc: '2.0', id, method, params })
     return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }))
@@ -357,6 +450,19 @@ function normalizeButton(def: ButtonDef): ButtonDef {
     enabled: def.enabled ?? true,
   }
 }
+
+function integer(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`)
+  return value
+}
+
+function ensureSuccess(result: CommandResult, action: string): void {
+  if (result.exitCode !== 0) {
+    throw new Error(`Failed to ${action}: ${result.stderr.trim() || `exit code ${result.exitCode}`}`)
+  }
+}
+
+const SCREENSHOT_CHUNK_SIZE = 250_000
 
 export function apply(ctx: CordisContext, config: Config = {}): void {
   const bridge = new AndroidBridge(ctx, config)
