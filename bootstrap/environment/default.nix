@@ -2,7 +2,6 @@
 
 let
   runtime-pkgs = import inputs.nixpkgs { system = runtimeSystem; };
-  runtime-node-pkgs = import inputs.node-pkgs { system = runtimeSystem; };
   login = callPackage ./login.nix { };
   env = callPackage ./env.nix { inherit (runtime-pkgs) busybox; };
   certs = callPackage ./certs.nix { };
@@ -17,7 +16,9 @@ buildEnv {
     certs
     busybox
     zip
-    runtime-node-pkgs.nodejs-slim_26
+    pnpm
+    yarn-berry
+    nodejs-slim_26
   ] ++ (lib.optionals full [
     fonts
     chromium
