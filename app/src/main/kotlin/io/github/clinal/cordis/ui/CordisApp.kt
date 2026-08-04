@@ -100,7 +100,9 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                 Header(
                     instanceCount = instances.size,
                     actionsEnabled = actionsEnabled,
-                    onAddInstance = viewModel::addInstance,
+                    onAddInstance = {
+                        context.startActivity(Intent(context, CreateInstanceActivity::class.java))
+                    },
                     onOpenTerminal = viewModel::openGlobalTerminal,
                 )
 

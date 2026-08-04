@@ -23,13 +23,14 @@ class InstanceRepository(context: Context) {
     private val mutableHomeShortcuts = MutableStateFlow(loadHomeShortcuts())
     val homeShortcuts: StateFlow<List<HomeShortcut>> = mutableHomeShortcuts
 
-    fun addInstance() {
+    @Synchronized
+    fun addInstance(name: String? = null): CordisInstance {
         val nextIndex = nextInstanceIndex()
         val id = instanceId(nextIndex)
         val currentInstances = mutableInstances.value
         val instance = CordisInstance(
             id = id,
-            name = "instance $nextIndex",
+            name = name?.trim().takeUnless { it.isNullOrEmpty() } ?: "instance $nextIndex",
             port = nextAvailablePort(currentInstances),
             dns = DEFAULT_DNS,
             androidControlEnabled = false,
@@ -45,6 +46,7 @@ class InstanceRepository(context: Context) {
         mutableInstances.update { instances ->
             instances + instance
         }
+        return instance
     }
 
     fun removeInstance(id: String) {
