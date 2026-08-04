@@ -17,6 +17,7 @@ buildEnv {
     certs
     busybox
     zip
+    runtime-node-pkgs.yarn-berry
     runtime-node-pkgs.nodejs-slim_26
   ] ++ (lib.optionals full [
     fonts
