@@ -717,11 +717,14 @@ private fun BootstrapInstallOverlay(message: String) {
 @Composable
 private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
     val listState = rememberLazyListState()
-    val visibleLines = lines.takeLast(80)
+    val firstVisibleLine = (lines.size - MAX_VISIBLE_LOG_LINES).coerceAtLeast(0)
+    val visibleLineCount = lines.size - firstVisibleLine
 
-    LaunchedEffect(autoScroll, visibleLines.size, visibleLines.lastOrNull()) {
-        if (autoScroll && visibleLines.isNotEmpty()) {
-            listState.animateScrollToItem(visibleLines.lastIndex)
+    LaunchedEffect(autoScroll, lines.size) {
+        if (autoScroll && visibleLineCount > 0) {
+            // A new process line can arrive before the previous scroll animation finishes.
+            // Jumping to the tail avoids continuously cancelling and restarting animations.
+            listState.scrollToItem(visibleLineCount - 1)
         }
     }
 
@@ -744,9 +747,9 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(visibleLines) { line ->
+                items(count = visibleLineCount) { index ->
                     Text(
-                        text = line,
+                        text = lines[firstVisibleLine + index],
                         color = Color(0xFFE6EDF3),
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
@@ -756,3 +759,5 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
         }
     }
 }
+
+private const val MAX_VISIBLE_LOG_LINES = 80
