@@ -48,6 +48,13 @@ jobs:
       - name: Build bootstrap assets
         run: nix build ./bootstrap
 
+      - name: Add Android plugins to test boilerplate
+        run: |
+          nix shell nixpkgs#nodejs_24 nixpkgs#zip nixpkgs#unzip --command \
+            node scripts/package-cordis-android-boilerplate.mjs \
+              --input result \
+              --output ci-bootstrap-assets
+
       - name: Prepare CI signing key
         if: env.CORDIS_ANDROID_KEYSTORE_BASE64 != ''
         run: |
@@ -55,7 +62,7 @@ jobs:
           printf '%s' "$CORDIS_ANDROID_KEYSTORE_BASE64" | base64 -d > "$CORDIS_ANDROID_KEYSTORE_FILE"
 
       - name: Build debug APK
-        run: nix develop --command gradle -PcordisBootstrapAssetsDir=result --build-cache clean assembleDebug
+        run: nix develop --command gradle -PcordisBootstrapAssetsDir=ci-bootstrap-assets --build-cache clean assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
