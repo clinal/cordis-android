@@ -787,7 +787,7 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
     val firstVisibleLine = (lines.size - MAX_VISIBLE_LOG_LINES).coerceAtLeast(0)
     val visibleLineCount = lines.size - firstVisibleLine
 
-    LaunchedEffect(autoScroll, lines.size) {
+    LaunchedEffect(autoScroll, lines.size, lines.lastOrNull()) {
         if (autoScroll && visibleLineCount > 0) {
             // Schedule the tail position for the next remeasure. A synchronous scroll can
             // collide with Compose's current measure/layout pass when a process starts.
