@@ -32,8 +32,18 @@ class CordisViewModel(application: Application) : AndroidViewModel(application) 
         port: Int,
         dns: String,
         androidControlEnabled: Boolean,
+        hasWebService: Boolean,
+        patchPort: Boolean,
     ) {
-        app.instanceRepository.updateInstanceConfig(instanceId, name, port, dns, androidControlEnabled)
+        app.instanceRepository.updateInstanceConfig(
+            instanceId,
+            name,
+            port,
+            dns,
+            androidControlEnabled,
+            hasWebService,
+            patchPort,
+        )
     }
 
     fun openGlobalTerminal() {
