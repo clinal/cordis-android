@@ -28,6 +28,7 @@ class InstanceRepository(context: Context) {
         name: String? = null,
         hasWebService: Boolean = true,
         patchPort: Boolean = hasWebService,
+        startCommand: String = DEFAULT_START_COMMAND,
     ): CordisInstance {
         val nextIndex = nextInstanceIndex()
         val id = instanceId(nextIndex)
@@ -40,6 +41,7 @@ class InstanceRepository(context: Context) {
             androidControlEnabled = false,
             hasWebService = hasWebService,
             patchPort = hasWebService && patchPort,
+            startCommand = sanitizeStartCommand(startCommand),
             status = initialStatus(),
             bridgeStatus = AndroidBridgeStatus.Stopped,
             bridgeButtons = emptyList(),
@@ -73,6 +75,7 @@ class InstanceRepository(context: Context) {
         androidControlEnabled: Boolean,
         hasWebService: Boolean,
         patchPort: Boolean,
+        startCommand: String,
     ) {
         val sanitizedName = name.trim().ifBlank { defaultName(id) }
         val sanitizedPort = port.coerceIn(MIN_PORT, MAX_PORT)
@@ -87,6 +90,7 @@ class InstanceRepository(context: Context) {
                         androidControlEnabled = androidControlEnabled,
                         hasWebService = hasWebService,
                         patchPort = hasWebService && patchPort,
+                        startCommand = sanitizeStartCommand(startCommand),
                     )
                         .also(::saveInstanceConfig)
                 } else {
@@ -251,6 +255,9 @@ class InstanceRepository(context: Context) {
                 hasWebService = preferences.getBoolean(instanceKey(id, KEY_HAS_WEB_SERVICE), true),
                 patchPort = preferences.getBoolean(instanceKey(id, KEY_HAS_WEB_SERVICE), true) &&
                     preferences.getBoolean(instanceKey(id, KEY_PATCH_PORT), true),
+                startCommand = sanitizeStartCommand(
+                    preferences.getString(instanceKey(id, KEY_START_COMMAND), null),
+                ),
                 status = initialStatus(),
                 bridgeStatus = AndroidBridgeStatus.Stopped,
                 bridgeButtons = emptyList(),
@@ -332,6 +339,7 @@ class InstanceRepository(context: Context) {
             .putBoolean(instanceKey(instance.id, KEY_ANDROID_CONTROL), instance.androidControlEnabled)
             .putBoolean(instanceKey(instance.id, KEY_HAS_WEB_SERVICE), instance.hasWebService)
             .putBoolean(instanceKey(instance.id, KEY_PATCH_PORT), instance.hasWebService && instance.patchPort)
+            .putString(instanceKey(instance.id, KEY_START_COMMAND), instance.startCommand)
             .apply()
     }
 
@@ -344,10 +352,15 @@ class InstanceRepository(context: Context) {
             .remove(instanceKey(id, KEY_ANDROID_CONTROL))
             .remove(instanceKey(id, KEY_HAS_WEB_SERVICE))
             .remove(instanceKey(id, KEY_PATCH_PORT))
+            .remove(instanceKey(id, KEY_START_COMMAND))
             .apply()
     }
 
     private fun instanceKey(id: String, key: String): String = "$id.$key"
+
+    private fun sanitizeStartCommand(command: String?): String {
+        return command?.trim().takeUnless { it.isNullOrEmpty() } ?: DEFAULT_START_COMMAND
+    }
 
     private fun appendLog(lines: List<String>, line: String?): List<String> {
         if (line.isNullOrBlank()) return lines
@@ -385,6 +398,7 @@ class InstanceRepository(context: Context) {
         const val DEFAULT_INSTANCE_ID = "default"
         const val DEFAULT_BASE_PORT = 3140
         const val DEFAULT_DNS = "223.5.5.5"
+        const val DEFAULT_START_COMMAND = "yarn start"
         private const val PREFERENCES_NAME = "cordis_instances"
         private const val KEY_INSTANCE_IDS = "instance_ids"
         private const val KEY_NAME = "name"
@@ -394,6 +408,7 @@ class InstanceRepository(context: Context) {
         private const val KEY_ANDROID_CONTROL = "android_control"
         private const val KEY_HAS_WEB_SERVICE = "has_web_service"
         private const val KEY_PATCH_PORT = "patch_port"
+        private const val KEY_START_COMMAND = "start_command"
         private const val KEY_HOME_BUTTONS = "home_buttons"
         private const val INSTANCE_ID_PREFIX = "instance-"
         private const val MIN_PORT = 1024
