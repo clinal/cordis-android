@@ -66,7 +66,13 @@ class RuntimeSupervisor(
                 val dns = instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }
 
                 instanceRepository.appendLog(instanceId, "Starting Cordis with yarn start.")
-                val bridgeServer = AndroidBridgeServer(instanceId, instanceRepository, scope).also { bridge ->
+                val bridgeServer = AndroidBridgeServer(
+                    instanceId = instanceId,
+                    controlEnabled = instance.androidControlEnabled,
+                    context = appContext,
+                    instanceRepository = instanceRepository,
+                    parentScope = scope,
+                ).also { bridge ->
                     bridgeServers[instanceId] = bridge
                     bridge.start()
                 }

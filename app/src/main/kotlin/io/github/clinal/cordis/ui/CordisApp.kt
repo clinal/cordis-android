@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -541,11 +542,15 @@ private val RuntimeStatus.canStart: Boolean
 @Composable
 fun InstanceSettingsPanel(
     instance: CordisInstance,
-    onSave: (name: String, port: Int, dns: String) -> Unit,
+    androidControlError: String? = null,
+    onSave: (name: String, port: Int, dns: String, androidControlEnabled: Boolean) -> Unit,
 ) {
     var nameText by remember(instance.id, instance.name) { mutableStateOf(instance.name) }
     var portText by remember(instance.id, instance.port) { mutableStateOf(instance.port.toString()) }
     var dnsText by remember(instance.id, instance.dns) { mutableStateOf(instance.dns) }
+    var androidControlEnabled by remember(instance.id, instance.androidControlEnabled) {
+        mutableStateOf(instance.androidControlEnabled)
+    }
     val parsedPort = portText.toIntOrNull()
     val portIsValid = parsedPort != null && parsedPort in 1024..65535
 
@@ -571,6 +576,31 @@ fun InstanceSettingsPanel(
                 label = { Text("Instance name") },
                 singleLine = true,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Android control", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Allow this instance to control the device through Shizuku. Takes effect after restart.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = androidControlEnabled,
+                    onCheckedChange = { androidControlEnabled = it },
+                )
+            }
+            androidControlError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = portText,
@@ -593,7 +623,9 @@ fun InstanceSettingsPanel(
                 horizontalArrangement = Arrangement.End,
             ) {
                 Button(
-                    onClick = { parsedPort?.let { onSave(nameText, it, dnsText) } },
+                    onClick = {
+                        parsedPort?.let { onSave(nameText, it, dnsText, androidControlEnabled) }
+                    },
                     enabled = portIsValid,
                 ) {
                     Icon(Icons.Default.Save, contentDescription = null)
