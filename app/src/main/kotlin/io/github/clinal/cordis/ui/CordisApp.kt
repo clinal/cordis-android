@@ -696,32 +696,22 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
         }
     }
 
-    Box(
-        modifier = Modifier.pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    awaitPointerEvent().changes.forEach { change -> change.consume() }
-                }
-            }
-        },
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .background(Color(0xFF101418))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .background(Color(0xFF101418))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            items(count = visibleLineCount) { index ->
-                Text(
-                    text = lines[firstVisibleLine + index],
-                    color = Color(0xFFE6EDF3),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                )
-            }
+        items(count = visibleLineCount) { index ->
+            Text(
+                text = lines[firstVisibleLine + index],
+                color = Color(0xFFE6EDF3),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+            )
         }
     }
 }
