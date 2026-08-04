@@ -556,6 +556,7 @@ fun InstanceSettingsPanel(
         androidControlEnabled: Boolean,
         hasWebService: Boolean,
         patchPort: Boolean,
+        startCommand: String,
     ) -> Unit,
 ) {
     var nameText by remember(instance.id, instance.name) { mutableStateOf(instance.name) }
@@ -566,6 +567,7 @@ fun InstanceSettingsPanel(
     }
     var hasWebService by remember(instance.id, instance.hasWebService) { mutableStateOf(instance.hasWebService) }
     var patchPort by remember(instance.id, instance.patchPort) { mutableStateOf(instance.patchPort) }
+    var startCommand by remember(instance.id, instance.startCommand) { mutableStateOf(instance.startCommand) }
     val parsedPort = portText.toIntOrNull()
     val portIsValid = parsedPort != null && parsedPort in 1024..65535
 
@@ -648,6 +650,14 @@ fun InstanceSettingsPanel(
                 placeholder = { Text(InstanceRepository.DEFAULT_DNS) },
                 singleLine = true,
             )
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = startCommand,
+                onValueChange = { startCommand = it },
+                label = { Text("Start command") },
+                placeholder = { Text(InstanceRepository.DEFAULT_START_COMMAND) },
+                singleLine = true,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -655,7 +665,15 @@ fun InstanceSettingsPanel(
                 Button(
                     onClick = {
                         parsedPort?.let {
-                            onSave(nameText, it, dnsText, androidControlEnabled, hasWebService, patchPort)
+                            onSave(
+                                nameText,
+                                it,
+                                dnsText,
+                                androidControlEnabled,
+                                hasWebService,
+                                patchPort,
+                                startCommand,
+                            )
                         }
                     },
                     enabled = portIsValid,

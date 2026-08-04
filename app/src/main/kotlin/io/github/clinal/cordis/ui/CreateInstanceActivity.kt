@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.github.clinal.cordis.CordisApplication
+import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.runtime.RuntimeInstaller
 import io.github.clinal.cordis.ui.theme.CordisTheme
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +83,7 @@ class CreateInstanceActivity : ComponentActivity() {
         useCustomPackage: Boolean,
         hasWebService: Boolean,
         patchPort: Boolean,
+        startCommand: String,
     ) {
         val selectedPackage = packageUri
         if (useCustomPackage && selectedPackage == null) {
@@ -95,7 +97,12 @@ class CreateInstanceActivity : ComponentActivity() {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val app = application as CordisApplication
-                    val instance = app.instanceRepository.addInstance(name, hasWebService, patchPort)
+                    val instance = app.instanceRepository.addInstance(
+                        name,
+                        hasWebService,
+                        patchPort,
+                        startCommand,
+                    )
                     try {
                         if (selectedPackage != null && useCustomPackage) {
                             RuntimeInstaller(app).installCustomPackage(
@@ -134,12 +141,16 @@ private fun CreateInstanceScreen(
         useCustomPackage: Boolean,
         hasWebService: Boolean,
         patchPort: Boolean,
+        startCommand: String,
     ) -> Unit,
 ) {
     var name by androidx.compose.runtime.remember { mutableStateOf("") }
     var useCustomPackage by androidx.compose.runtime.remember { mutableStateOf(false) }
     var hasWebService by androidx.compose.runtime.remember { mutableStateOf(true) }
     var patchPort by androidx.compose.runtime.remember { mutableStateOf(true) }
+    var startCommand by androidx.compose.runtime.remember {
+        mutableStateOf(InstanceRepository.DEFAULT_START_COMMAND)
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -214,6 +225,16 @@ private fun CreateInstanceScreen(
                 )
             }
 
+            OutlinedTextField(
+                value = startCommand,
+                onValueChange = { startCommand = it },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !creating,
+                singleLine = true,
+                label = { Text("Start command") },
+                placeholder = { Text(InstanceRepository.DEFAULT_START_COMMAND) },
+            )
+
             errorMessage?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.error)
             }
@@ -224,7 +245,9 @@ private fun CreateInstanceScreen(
 
             Button(
                 modifier = Modifier.testTag("cordis.createInstance.confirm"),
-                onClick = { onCreate(name, useCustomPackage, hasWebService, patchPort) },
+                onClick = {
+                    onCreate(name, useCustomPackage, hasWebService, patchPort, startCommand)
+                },
                 enabled = !creating && (!useCustomPackage || packageName != null),
             ) {
                 Text("Create")

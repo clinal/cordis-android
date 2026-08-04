@@ -8,6 +8,7 @@ data class CordisInstance(
     val androidControlEnabled: Boolean,
     val hasWebService: Boolean,
     val patchPort: Boolean,
+    val startCommand: String,
     val status: RuntimeStatus,
     val bridgeStatus: AndroidBridgeStatus,
     val bridgeButtons: List<CordisButton>,

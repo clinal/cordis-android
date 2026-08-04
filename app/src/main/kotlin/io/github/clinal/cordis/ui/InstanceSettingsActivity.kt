@@ -89,6 +89,7 @@ class InstanceSettingsActivity : ComponentActivity() {
                                         androidControlEnabled,
                                         hasWebService,
                                         patchPort,
+                                        startCommand,
                                     ->
                                     validateAndSave(
                                         PendingSave(
@@ -99,6 +100,7 @@ class InstanceSettingsActivity : ComponentActivity() {
                                             androidControlEnabled,
                                             hasWebService,
                                             patchPort,
+                                            startCommand,
                                         ),
                                     )
                                 },
@@ -197,6 +199,7 @@ class InstanceSettingsActivity : ComponentActivity() {
             config.androidControlEnabled,
             config.hasWebService,
             config.patchPort,
+            config.startCommand,
         )
         finish()
     }
@@ -221,6 +224,7 @@ private data class PendingSave(
     val androidControlEnabled: Boolean,
     val hasWebService: Boolean,
     val patchPort: Boolean,
+    val startCommand: String,
 )
 
 @Composable
