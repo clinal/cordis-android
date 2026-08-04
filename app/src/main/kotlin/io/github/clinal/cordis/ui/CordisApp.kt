@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -804,12 +805,14 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         items(count = visibleLineCount) { index ->
-            Text(
-                text = lines[firstVisibleLine + index],
-                color = Color(0xFFE6EDF3),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-            )
+            SelectionContainer {
+                Text(
+                    text = lines[firstVisibleLine + index],
+                    color = Color(0xFFE6EDF3),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
     }
 }
