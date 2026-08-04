@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -343,7 +346,32 @@ private fun InstancePanel(
     var logSelectionKey by remember(instance.id) { mutableStateOf(0) }
 
     Card(
-        modifier = Modifier.testTag("cordis.instance.${instance.id}"),
+        modifier = Modifier
+            .testTag("cordis.instance.${instance.id}")
+            .pointerInput(instance.id) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial,
+                    )
+                    var isTap = true
+                    var change = down
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                            isTap = false
+                        }
+                    } while (change.pressed)
+
+                    if (
+                        isTap &&
+                        change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
+                    ) {
+                        logSelectionKey++
+                    }
+                }
+            },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -804,17 +832,17 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(220.dp)
-            .background(Color(0xFF101418))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        items(count = visibleLineCount) { index ->
-            SelectionContainer {
+    SelectionContainer {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .background(Color(0xFF101418))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items(count = visibleLineCount) { index ->
                 Text(
                     text = lines[firstVisibleLine + index],
                     color = Color(0xFFE6EDF3),
