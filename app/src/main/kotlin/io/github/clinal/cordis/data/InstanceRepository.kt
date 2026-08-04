@@ -32,6 +32,7 @@ class InstanceRepository(context: Context) {
             name = "instance $nextIndex",
             port = nextAvailablePort(currentInstances),
             dns = DEFAULT_DNS,
+            androidControlEnabled = false,
             status = initialStatus(),
             bridgeStatus = AndroidBridgeStatus.Stopped,
             bridgeButtons = emptyList(),
@@ -56,14 +57,19 @@ class InstanceRepository(context: Context) {
         }
     }
 
-    fun updateInstanceConfig(id: String, name: String, port: Int, dns: String) {
+    fun updateInstanceConfig(id: String, name: String, port: Int, dns: String, androidControlEnabled: Boolean) {
         val sanitizedName = name.trim().ifBlank { defaultName(id) }
         val sanitizedPort = port.coerceIn(MIN_PORT, MAX_PORT)
         val sanitizedDns = dns.trim().ifBlank { DEFAULT_DNS }
         mutableInstances.update { instances ->
             instances.map { instance ->
                 if (instance.id == id) {
-                    instance.copy(name = sanitizedName, port = sanitizedPort, dns = sanitizedDns)
+                    instance.copy(
+                        name = sanitizedName,
+                        port = sanitizedPort,
+                        dns = sanitizedDns,
+                        androidControlEnabled = androidControlEnabled,
+                    )
                         .also(::saveInstanceConfig)
                 } else {
                     instance
@@ -223,6 +229,7 @@ class InstanceRepository(context: Context) {
                     ?.trim()
                     ?.ifBlank { DEFAULT_DNS }
                     ?: DEFAULT_DNS,
+                androidControlEnabled = preferences.getBoolean(instanceKey(id, KEY_ANDROID_CONTROL), false),
                 status = initialStatus(),
                 bridgeStatus = AndroidBridgeStatus.Stopped,
                 bridgeButtons = emptyList(),
@@ -301,6 +308,7 @@ class InstanceRepository(context: Context) {
             .putString(instanceKey(instance.id, KEY_NAME), instance.name)
             .putInt(instanceKey(instance.id, KEY_PORT), instance.port)
             .putString(instanceKey(instance.id, KEY_DNS), instance.dns)
+            .putBoolean(instanceKey(instance.id, KEY_ANDROID_CONTROL), instance.androidControlEnabled)
             .apply()
     }
 
@@ -310,6 +318,7 @@ class InstanceRepository(context: Context) {
             .remove(instanceKey(id, KEY_PORT))
             .remove(instanceKey(id, KEY_DNS))
             .remove(instanceKey(id, KEY_AUTO_START))
+            .remove(instanceKey(id, KEY_ANDROID_CONTROL))
             .apply()
     }
 
@@ -357,6 +366,7 @@ class InstanceRepository(context: Context) {
         private const val KEY_PORT = "port"
         private const val KEY_DNS = "dns"
         private const val KEY_AUTO_START = "auto_start"
+        private const val KEY_ANDROID_CONTROL = "android_control"
         private const val KEY_HOME_BUTTONS = "home_buttons"
         private const val INSTANCE_ID_PREFIX = "instance-"
         private const val MIN_PORT = 1024

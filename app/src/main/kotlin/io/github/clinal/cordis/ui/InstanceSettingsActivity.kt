@@ -1,9 +1,12 @@
 package io.github.clinal.cordis.ui
 
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,18 +23,39 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.clinal.cordis.ui.theme.CordisTheme
+import io.github.clinal.cordis.runtime.AndroidControlShell
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import rikka.shizuku.Shizuku
 
 class InstanceSettingsActivity : ComponentActivity() {
     private val viewModel by viewModels<CordisViewModel>()
+    private val shizukuError = mutableStateOf<String?>(null)
+    private var pendingSave: PendingSave? = null
+    private val permissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, result ->
+        if (requestCode != SHIZUKU_PERMISSION_REQUEST_CODE) return@OnRequestPermissionResultListener
+        if (result == PackageManager.PERMISSION_GRANTED) {
+            Log.i(TAG, "Shizuku permission granted; verifying Android control UserService")
+            pendingSave?.let(::verifyAndPersist)
+        } else {
+            pendingSave = null
+            reportShizukuError(
+                "Shizuku permission was denied. Grant cordis-android access in Shizuku, then save again.",
+            )
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Shizuku.addRequestPermissionResultListener(permissionResultListener)
 
         val instanceId = intent.getStringExtra(EXTRA_INSTANCE_ID).orEmpty()
         setContent {
@@ -57,9 +81,11 @@ class InstanceSettingsActivity : ComponentActivity() {
                         if (instance != null) {
                             InstanceSettingsPanel(
                                 instance = instance,
-                                onSave = { name, port, dns ->
-                                    viewModel.updateInstanceConfig(instance.id, name, port, dns)
-                                    finish()
+                                androidControlError = shizukuError.value,
+                                onSave = { name, port, dns, androidControlEnabled ->
+                                    validateAndSave(
+                                        PendingSave(instance.id, name, port, dns, androidControlEnabled),
+                                    )
                                 },
                             )
                         }
@@ -69,10 +95,114 @@ class InstanceSettingsActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        Shizuku.removeRequestPermissionResultListener(permissionResultListener)
+        super.onDestroy()
+    }
+
+    private fun validateAndSave(config: PendingSave) {
+        shizukuError.value = null
+        if (!config.androidControlEnabled) {
+            persistAndFinish(config)
+            return
+        }
+        try {
+            validateShizukuAndSave(config)
+        } catch (error: Exception) {
+            pendingSave = null
+            reportShizukuError(
+                "Unable to check Shizuku: ${error.message ?: error.javaClass.simpleName}.",
+                error,
+            )
+        }
+    }
+
+    private fun validateShizukuAndSave(config: PendingSave) {
+        if (!Shizuku.pingBinder()) {
+            reportShizukuError(
+                "Cannot enable Android control because Shizuku is not running. Start Shizuku, then save again.",
+            )
+            return
+        }
+        if (Shizuku.isPreV11()) {
+            reportShizukuError("Cannot enable Android control because Shizuku 11 or newer is required.")
+            return
+        }
+        if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+            verifyAndPersist(config)
+            return
+        }
+        if (Shizuku.shouldShowRequestPermissionRationale()) {
+            reportShizukuError(
+                "Shizuku permission is required. Grant cordis-android access in Shizuku, then save again.",
+            )
+            return
+        }
+
+        pendingSave = config
+        Log.i(TAG, "Requesting Shizuku permission before enabling Android control")
+        Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
+    }
+
+    private fun verifyAndPersist(config: PendingSave) {
+        pendingSave = config
+        shizukuError.value = "Connecting to the Shizuku Android control service…"
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val shell = AndroidControlShell(applicationContext)
+                    try {
+                        shell.execute("true")
+                    } finally {
+                        shell.close()
+                    }
+                }
+            }
+            result.onSuccess {
+                Log.i(TAG, "Shizuku Android control UserService verified; saving setting")
+                persistAndFinish(config)
+            }.onFailure { error ->
+                pendingSave = null
+                reportShizukuError(
+                    "Could not connect to the Shizuku Android control service: " +
+                        (error.message ?: error.javaClass.simpleName),
+                    error,
+                )
+            }
+        }
+    }
+
+    private fun persistAndFinish(config: PendingSave) {
+        pendingSave = null
+        viewModel.updateInstanceConfig(
+            config.instanceId,
+            config.name,
+            config.port,
+            config.dns,
+            config.androidControlEnabled,
+        )
+        finish()
+    }
+
+    private fun reportShizukuError(message: String, error: Throwable? = null) {
+        shizukuError.value = message
+        if (error == null) Log.w(TAG, message) else Log.e(TAG, message, error)
+    }
+
     companion object {
         const val EXTRA_INSTANCE_ID = "instance_id"
+        private const val SHIZUKU_PERMISSION_REQUEST_CODE = 1001
+        private const val TAG = "InstanceSettings"
     }
 }
+
+private data class PendingSave(
+    val instanceId: String,
+    val name: String,
+    val port: Int,
+    val dns: String,
+    val androidControlEnabled: Boolean,
+)
 
 @Composable
 private fun SettingsHeader(

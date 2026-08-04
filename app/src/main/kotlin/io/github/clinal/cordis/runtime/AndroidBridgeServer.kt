@@ -3,6 +3,7 @@ package io.github.clinal.cordis.runtime
 import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.util.Log
+import android.content.Context
 import io.github.clinal.cordis.data.ButtonPatch
 import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.domain.AndroidBridgeStatus
@@ -19,11 +20,14 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 class AndroidBridgeServer(
     private val instanceId: String,
+    private val controlEnabled: Boolean,
+    context: Context,
     private val instanceRepository: InstanceRepository,
     parentScope: CoroutineScope,
 ) {
@@ -38,6 +42,7 @@ class AndroidBridgeServer(
     private var acceptJob: Job? = null
     private var pollJob: Job? = null
     private var nextRequestId = 0L
+    private val controlShell = AndroidControlShell(context.applicationContext)
 
     val environment: Map<String, String>
         get() = mapOf(
@@ -46,6 +51,7 @@ class AndroidBridgeServer(
             "CORDIS_ANDROID_INSTANCE_ID" to instanceId,
             "CORDIS_ANDROID_PROTOCOL" to PROTOCOL,
             "CORDIS_ANDROID_TOKEN" to token,
+            "CORDIS_ANDROID_CONTROL_ENABLED" to controlEnabled.toString(),
         )
 
     fun start() {
@@ -81,9 +87,23 @@ class AndroidBridgeServer(
 
     fun click(buttonId: String) {
         scope.launch {
-            val sent = request("button.click", JSONObject().put("id", buttonId)) != null
+            val currentWriter = writer
+            if (currentWriter == null) {
+                instanceRepository.appendLog(
+                    instanceId,
+                    "Android bridge is not connected; cannot trigger button $buttonId.",
+                )
+                return@launch
+            }
+            val sent = write(
+                currentWriter,
+                JSONObject()
+                    .put("jsonrpc", "2.0")
+                    .put("method", "button.click")
+                    .put("params", JSONObject().put("id", buttonId)),
+            )
             if (!sent) {
-                instanceRepository.appendLog(instanceId, "Android bridge is not connected; cannot trigger button $buttonId.")
+                instanceRepository.appendLog(instanceId, "Failed to send Android button $buttonId to the Cordis plugin.")
             }
         }
     }
@@ -117,10 +137,10 @@ class AndroidBridgeServer(
         reader.lineSequence().forEach { line ->
             if (line.isBlank()) return@forEach
             val message = runCatching { JSONObject(line) }.getOrNull() ?: return@forEach
-            val id = message.optString("id").takeIf(String::isNotBlank)
+            val id = message.rpcId()
             when {
                 id != null && (message.has("result") || message.has("error")) -> {
-                    pendingResponses.remove(id)?.invoke(message)
+                    pendingResponses.remove(id.toString())?.invoke(message)
                 }
                 message.optString("method").isNotBlank() -> {
                     handleRequest(message)
@@ -130,7 +150,7 @@ class AndroidBridgeServer(
     }
 
     private fun handleRequest(message: JSONObject) {
-        val id = message.optString("id").takeIf(String::isNotBlank)
+        val id = message.rpcId()
         val params = message.optJSONObject("params") ?: JSONObject()
         when (message.optString("method")) {
             "hello" -> {
@@ -164,8 +184,33 @@ class AndroidBridgeServer(
                 }
                 reply(id, JSONObject())
             }
+            "control.execute" -> {
+                if (!controlEnabled) {
+                    replyError(id, 1002, "Android control is not enabled for this Cordis instance")
+                } else {
+                    val command = params.optString("command")
+                    if (command.isBlank()) {
+                        replyError(id, -32602, "missing command")
+                    } else {
+                        scope.launch {
+                            runCatching { executeControlCommand(command) }
+                                .onSuccess { reply(id, it) }
+                                .onFailure { error ->
+                                    val message = error.message ?: "Android control failed with an unknown error."
+                                    Log.e(TAG, "Android control request failed for instance $instanceId: $message", error)
+                                    instanceRepository.appendLog(instanceId, "Android control failed: $message")
+                                    replyError(id, 1003, message)
+                                }
+                        }
+                    }
+                }
+            }
             else -> replyError(id, -32601, "method not found")
         }
+    }
+
+    private fun executeControlCommand(command: String): JSONObject {
+        return controlShell.execute(command)
     }
 
     private fun startButtonPolling() {
@@ -179,7 +224,7 @@ class AndroidBridgeServer(
     }
 
     private suspend fun refreshButtons() {
-        val response = request("buttons", JSONObject()) ?: return
+        val response = request("buttons", JSONObject()).getOrNull() ?: return
         val result = response.opt("result")
         val array = when (result) {
             is JSONArray -> result
@@ -190,8 +235,14 @@ class AndroidBridgeServer(
         instanceRepository.replaceBridgeButtons(instanceId, buttons)
     }
 
-    private suspend fun request(method: String, params: JSONObject): JSONObject? {
-        val currentWriter = writer ?: return null
+    private suspend fun request(
+        method: String,
+        params: JSONObject,
+        timeoutMs: Long = REQUEST_TIMEOUT_MS,
+    ): Result<JSONObject> {
+        val currentWriter = writer ?: return Result.failure(
+            IOException("Cordis plugin socket is not connected (bridge status: ${instanceRepository.instance(instanceId)?.bridgeStatus})."),
+        )
         val id = (++nextRequestId).toString()
         var response: JSONObject? = null
         val waitLock = Object()
@@ -211,16 +262,18 @@ class AndroidBridgeServer(
         )
         if (!sent) {
             pendingResponses.remove(id)
-            return null
+            return Result.failure(IOException("Failed to write $method to the Cordis plugin socket."))
         }
         synchronized(waitLock) {
-            if (response == null) waitLock.wait(REQUEST_TIMEOUT_MS)
+            if (response == null) waitLock.wait(timeoutMs)
         }
         pendingResponses.remove(id)
-        return response
+        return response?.let { Result.success(it) } ?: Result.failure(
+            SocketTimeoutException("Cordis plugin did not respond to $method within ${timeoutMs / 1_000} seconds."),
+        )
     }
 
-    private fun reply(id: String?, result: JSONObject) {
+    private fun reply(id: Any?, result: JSONObject) {
         if (id == null) return
         scope.launch {
             writer?.let { currentWriter ->
@@ -229,7 +282,7 @@ class AndroidBridgeServer(
         }
     }
 
-    private fun replyError(id: String?, code: Int, message: String) {
+    private fun replyError(id: Any?, code: Int, message: String) {
         if (id == null) return
         scope.launch {
             writer?.let { currentWriter ->
@@ -271,6 +324,8 @@ class AndroidBridgeServer(
             disabledReason = optString("disabledReason").takeIf(String::isNotBlank),
         )
     }
+
+    private fun JSONObject.rpcId(): Any? = opt("id")?.takeUnless { it == JSONObject.NULL }
 
     private fun JSONObject.toCordisButtonOrNull(): CordisButton? {
         return runCatching { toCordisButton() }.getOrNull()
