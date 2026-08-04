@@ -82,9 +82,24 @@ class InstanceSettingsActivity : ComponentActivity() {
                             InstanceSettingsPanel(
                                 instance = instance,
                                 androidControlError = shizukuError.value,
-                                onSave = { name, port, dns, androidControlEnabled ->
+                                onSave = {
+                                        name,
+                                        port,
+                                        dns,
+                                        androidControlEnabled,
+                                        hasWebService,
+                                        patchPort,
+                                    ->
                                     validateAndSave(
-                                        PendingSave(instance.id, name, port, dns, androidControlEnabled),
+                                        PendingSave(
+                                            instance.id,
+                                            name,
+                                            port,
+                                            dns,
+                                            androidControlEnabled,
+                                            hasWebService,
+                                            patchPort,
+                                        ),
                                     )
                                 },
                             )
@@ -180,6 +195,8 @@ class InstanceSettingsActivity : ComponentActivity() {
             config.port,
             config.dns,
             config.androidControlEnabled,
+            config.hasWebService,
+            config.patchPort,
         )
         finish()
     }
@@ -202,6 +219,8 @@ private data class PendingSave(
     val port: Int,
     val dns: String,
     val androidControlEnabled: Boolean,
+    val hasWebService: Boolean,
+    val patchPort: Boolean,
 )
 
 @Composable

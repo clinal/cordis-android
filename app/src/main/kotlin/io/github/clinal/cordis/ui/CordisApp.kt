@@ -370,13 +370,15 @@ private fun InstancePanel(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
-                        text = instance.consoleUrl,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    if (instance.hasWebService) {
+                        Text(
+                            text = instance.consoleUrl,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 StatusChip(instance.status)
             }
@@ -401,11 +403,13 @@ private fun InstancePanel(
                         },
                     )
                 }
-                IconButton(
-                    onClick = onOpenConsole,
-                    enabled = actionsEnabled && instance.status == RuntimeStatus.Running,
-                ) {
-                    Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
+                if (instance.hasWebService) {
+                    IconButton(
+                        onClick = onOpenConsole,
+                        enabled = actionsEnabled && instance.status == RuntimeStatus.Running,
+                    ) {
+                        Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
+                    }
                 }
                 IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
                     Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
@@ -545,7 +549,14 @@ private val RuntimeStatus.canStart: Boolean
 fun InstanceSettingsPanel(
     instance: CordisInstance,
     androidControlError: String? = null,
-    onSave: (name: String, port: Int, dns: String, androidControlEnabled: Boolean) -> Unit,
+    onSave: (
+        name: String,
+        port: Int,
+        dns: String,
+        androidControlEnabled: Boolean,
+        hasWebService: Boolean,
+        patchPort: Boolean,
+    ) -> Unit,
 ) {
     var nameText by remember(instance.id, instance.name) { mutableStateOf(instance.name) }
     var portText by remember(instance.id, instance.port) { mutableStateOf(instance.port.toString()) }
@@ -553,6 +564,8 @@ fun InstanceSettingsPanel(
     var androidControlEnabled by remember(instance.id, instance.androidControlEnabled) {
         mutableStateOf(instance.androidControlEnabled)
     }
+    var hasWebService by remember(instance.id, instance.hasWebService) { mutableStateOf(instance.hasWebService) }
+    var patchPort by remember(instance.id, instance.patchPort) { mutableStateOf(instance.patchPort) }
     val parsedPort = portText.toIntOrNull()
     val portIsValid = parsedPort != null && parsedPort in 1024..65535
 
@@ -603,6 +616,21 @@ fun InstanceSettingsPanel(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+            SettingsSwitch(
+                checked = hasWebService,
+                title = "Web service",
+                onCheckedChange = { enabled ->
+                    hasWebService = enabled
+                    if (!enabled) patchPort = false
+                },
+            )
+            if (hasWebService) {
+                SettingsSwitch(
+                    checked = patchPort,
+                    title = "Patch port on start",
+                    onCheckedChange = { patchPort = it },
+                )
+            }
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = portText,
@@ -626,7 +654,9 @@ fun InstanceSettingsPanel(
             ) {
                 Button(
                     onClick = {
-                        parsedPort?.let { onSave(nameText, it, dnsText, androidControlEnabled) }
+                        parsedPort?.let {
+                            onSave(nameText, it, dnsText, androidControlEnabled, hasWebService, patchPort)
+                        }
                     },
                     enabled = portIsValid,
                 ) {
@@ -635,6 +665,22 @@ fun InstanceSettingsPanel(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsSwitch(
+    checked: Boolean,
+    title: String,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

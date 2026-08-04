@@ -13,19 +13,18 @@ class RuntimeInstaller(context: Context) {
     private val appContext = context.applicationContext
     private val paths = RuntimePaths(appContext)
 
-    fun prepare(instanceId: String, port: Int, onProgress: (String) -> Unit = {}) {
+    fun prepare(instanceId: String, port: Int, patchPort: Boolean, onProgress: (String) -> Unit = {}) {
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
 
         val instanceHome = paths.instanceHome(instanceId)
         seedInstanceTemplate(instanceHome, onProgress)
-        ensureAppPortConfig(instanceHome, port, onProgress)
+        if (patchPort) ensureAppPortConfig(instanceHome, port, onProgress)
     }
 
     fun installCustomPackage(
         instanceId: String,
         packageUri: Uri,
-        port: Int,
         onProgress: (String) -> Unit = {},
     ) {
         val instanceHome = paths.instanceHome(instanceId)
@@ -47,8 +46,6 @@ class RuntimeInstaller(context: Context) {
                 }
             }
             staging.resolve(TEMPLATE_MARKER).writeText("custom\n")
-            ensureAppPortConfig(staging, port, onProgress)
-
             if (instanceHome.exists() && !instanceHome.deleteRecursively()) {
                 error("Cannot replace the instance directory.")
             }

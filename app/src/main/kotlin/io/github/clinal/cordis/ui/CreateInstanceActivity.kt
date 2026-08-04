@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -22,6 +24,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -74,7 +77,12 @@ class CreateInstanceActivity : ComponentActivity() {
         }
     }
 
-    private fun createInstance(name: String, useCustomPackage: Boolean) {
+    private fun createInstance(
+        name: String,
+        useCustomPackage: Boolean,
+        hasWebService: Boolean,
+        patchPort: Boolean,
+    ) {
         val selectedPackage = packageUri
         if (useCustomPackage && selectedPackage == null) {
             errorMessage = "Select a ZIP package first."
@@ -87,13 +95,12 @@ class CreateInstanceActivity : ComponentActivity() {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val app = application as CordisApplication
-                    val instance = app.instanceRepository.addInstance(name)
+                    val instance = app.instanceRepository.addInstance(name, hasWebService, patchPort)
                     try {
                         if (selectedPackage != null && useCustomPackage) {
                             RuntimeInstaller(app).installCustomPackage(
                                 instanceId = instance.id,
                                 packageUri = selectedPackage,
-                                port = instance.port,
                                 onProgress = { message -> runOnUiThread { progress = message } },
                             )
                         }
@@ -122,14 +129,24 @@ private fun CreateInstanceScreen(
     errorMessage: String?,
     onBack: () -> Unit,
     onSelectPackage: () -> Unit,
-    onCreate: (name: String, useCustomPackage: Boolean) -> Unit,
+    onCreate: (
+        name: String,
+        useCustomPackage: Boolean,
+        hasWebService: Boolean,
+        patchPort: Boolean,
+    ) -> Unit,
 ) {
     var name by androidx.compose.runtime.remember { mutableStateOf("") }
     var useCustomPackage by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var hasWebService by androidx.compose.runtime.remember { mutableStateOf(true) }
+    var patchPort by androidx.compose.runtime.remember { mutableStateOf(true) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(20.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Row(
@@ -177,6 +194,26 @@ private fun CreateInstanceScreen(
                 }
             }
 
+            BooleanOption(
+                checked = hasWebService,
+                title = "Web service",
+                description = "Show the WebView action for this instance.",
+                enabled = !creating,
+                onCheckedChange = { enabled ->
+                    hasWebService = enabled
+                    if (!enabled) patchPort = false
+                },
+            )
+            if (hasWebService) {
+                BooleanOption(
+                    checked = patchPort,
+                    title = "Patch port on start",
+                    description = "Update the server port in app.yml before each start.",
+                    enabled = !creating,
+                    onCheckedChange = { patchPort = it },
+                )
+            }
+
             errorMessage?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.error)
             }
@@ -187,12 +224,33 @@ private fun CreateInstanceScreen(
 
             Button(
                 modifier = Modifier.testTag("cordis.createInstance.confirm"),
-                onClick = { onCreate(name, useCustomPackage) },
+                onClick = { onCreate(name, useCustomPackage, hasWebService, patchPort) },
                 enabled = !creating && (!useCustomPackage || packageName != null),
             ) {
                 Text("Create")
             }
         }
+    }
+}
+
+@Composable
+private fun BooleanOption(
+    checked: Boolean,
+    title: String,
+    description: String,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(description, style = MaterialTheme.typography.bodyMedium)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

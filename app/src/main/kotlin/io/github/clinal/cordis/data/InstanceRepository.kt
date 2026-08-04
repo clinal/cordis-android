@@ -24,7 +24,11 @@ class InstanceRepository(context: Context) {
     val homeShortcuts: StateFlow<List<HomeShortcut>> = mutableHomeShortcuts
 
     @Synchronized
-    fun addInstance(name: String? = null): CordisInstance {
+    fun addInstance(
+        name: String? = null,
+        hasWebService: Boolean = true,
+        patchPort: Boolean = hasWebService,
+    ): CordisInstance {
         val nextIndex = nextInstanceIndex()
         val id = instanceId(nextIndex)
         val currentInstances = mutableInstances.value
@@ -34,6 +38,8 @@ class InstanceRepository(context: Context) {
             port = nextAvailablePort(currentInstances),
             dns = DEFAULT_DNS,
             androidControlEnabled = false,
+            hasWebService = hasWebService,
+            patchPort = hasWebService && patchPort,
             status = initialStatus(),
             bridgeStatus = AndroidBridgeStatus.Stopped,
             bridgeButtons = emptyList(),
@@ -59,7 +65,15 @@ class InstanceRepository(context: Context) {
         }
     }
 
-    fun updateInstanceConfig(id: String, name: String, port: Int, dns: String, androidControlEnabled: Boolean) {
+    fun updateInstanceConfig(
+        id: String,
+        name: String,
+        port: Int,
+        dns: String,
+        androidControlEnabled: Boolean,
+        hasWebService: Boolean,
+        patchPort: Boolean,
+    ) {
         val sanitizedName = name.trim().ifBlank { defaultName(id) }
         val sanitizedPort = port.coerceIn(MIN_PORT, MAX_PORT)
         val sanitizedDns = dns.trim().ifBlank { DEFAULT_DNS }
@@ -71,6 +85,8 @@ class InstanceRepository(context: Context) {
                         port = sanitizedPort,
                         dns = sanitizedDns,
                         androidControlEnabled = androidControlEnabled,
+                        hasWebService = hasWebService,
+                        patchPort = hasWebService && patchPort,
                     )
                         .also(::saveInstanceConfig)
                 } else {
@@ -232,6 +248,9 @@ class InstanceRepository(context: Context) {
                     ?.ifBlank { DEFAULT_DNS }
                     ?: DEFAULT_DNS,
                 androidControlEnabled = preferences.getBoolean(instanceKey(id, KEY_ANDROID_CONTROL), false),
+                hasWebService = preferences.getBoolean(instanceKey(id, KEY_HAS_WEB_SERVICE), true),
+                patchPort = preferences.getBoolean(instanceKey(id, KEY_HAS_WEB_SERVICE), true) &&
+                    preferences.getBoolean(instanceKey(id, KEY_PATCH_PORT), true),
                 status = initialStatus(),
                 bridgeStatus = AndroidBridgeStatus.Stopped,
                 bridgeButtons = emptyList(),
@@ -311,6 +330,8 @@ class InstanceRepository(context: Context) {
             .putInt(instanceKey(instance.id, KEY_PORT), instance.port)
             .putString(instanceKey(instance.id, KEY_DNS), instance.dns)
             .putBoolean(instanceKey(instance.id, KEY_ANDROID_CONTROL), instance.androidControlEnabled)
+            .putBoolean(instanceKey(instance.id, KEY_HAS_WEB_SERVICE), instance.hasWebService)
+            .putBoolean(instanceKey(instance.id, KEY_PATCH_PORT), instance.hasWebService && instance.patchPort)
             .apply()
     }
 
@@ -321,6 +342,8 @@ class InstanceRepository(context: Context) {
             .remove(instanceKey(id, KEY_DNS))
             .remove(instanceKey(id, KEY_AUTO_START))
             .remove(instanceKey(id, KEY_ANDROID_CONTROL))
+            .remove(instanceKey(id, KEY_HAS_WEB_SERVICE))
+            .remove(instanceKey(id, KEY_PATCH_PORT))
             .apply()
     }
 
@@ -369,6 +392,8 @@ class InstanceRepository(context: Context) {
         private const val KEY_DNS = "dns"
         private const val KEY_AUTO_START = "auto_start"
         private const val KEY_ANDROID_CONTROL = "android_control"
+        private const val KEY_HAS_WEB_SERVICE = "has_web_service"
+        private const val KEY_PATCH_PORT = "patch_port"
         private const val KEY_HOME_BUTTONS = "home_buttons"
         private const val INSTANCE_ID_PREFIX = "instance-"
         private const val MIN_PORT = 1024
