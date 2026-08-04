@@ -12,7 +12,7 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
                 trap : SIGINT
                 echo __PID__: ${'$'}${'$'}
                 $exports
-                cd /home && PROOT_TMP_DIR=/tmp node .yarn/releases/yarn-4.14.1.cjs start
+                cd /home && PROOT_TMP_DIR=/tmp yarn start
                 status=${'$'}?
                 echo __STATUS__: ${'$'}status
                 echo -e '\n[Process exited.]\n\n'
