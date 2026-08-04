@@ -4,8 +4,6 @@ import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -48,7 +45,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,7 +52,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -340,35 +335,10 @@ private fun InstancePanel(
     onRemove: () -> Unit,
 ) {
     var autoScroll by remember(instance.id) { mutableStateOf(true) }
-    var logSelectionKey by remember(instance.id) { mutableStateOf(0) }
 
     Card(
         modifier = Modifier
             .testTag("cordis.instance.${instance.id}")
-            .pointerInput(instance.id) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(
-                        requireUnconsumed = false,
-                        pass = PointerEventPass.Initial,
-                    )
-                    var isTap = true
-                    var change = down
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
-                            isTap = false
-                        }
-                    } while (change.pressed)
-
-                    if (
-                        isTap &&
-                        change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
-                    ) {
-                        logSelectionKey++
-                    }
-                }
-            }
             .combinedClickable(
                 enabled = actionsEnabled,
                 onClick = {},
@@ -469,9 +439,7 @@ private fun InstancePanel(
                 onRemoveHomeShortcut = onRemoveHomeShortcut,
             )
 
-            key(logSelectionKey) {
-                LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
-            }
+            LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
         }
     }
 }
@@ -717,42 +685,35 @@ private fun BootstrapInstallOverlay(message: String) {
 @Composable
 private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
     val listState = rememberLazyListState()
-    val visibleLines = lines.takeLast(80)
+    val firstVisibleLine = (lines.size - MAX_VISIBLE_LOG_LINES).coerceAtLeast(0)
+    val visibleLineCount = lines.size - firstVisibleLine
 
-    LaunchedEffect(autoScroll, visibleLines.size, visibleLines.lastOrNull()) {
-        if (autoScroll && visibleLines.isNotEmpty()) {
-            listState.animateScrollToItem(visibleLines.lastIndex)
+    LaunchedEffect(autoScroll, lines.size) {
+        if (autoScroll && visibleLineCount > 0) {
+            // Schedule the tail position for the next remeasure. A synchronous scroll can
+            // collide with Compose's current measure/layout pass when a process starts.
+            listState.requestScrollToItem(visibleLineCount - 1)
         }
     }
 
-    Box(
-        modifier = Modifier.pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    awaitPointerEvent().changes.forEach { change -> change.consume() }
-                }
-            }
-        },
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .background(Color(0xFF101418))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        SelectionContainer {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .background(Color(0xFF101418))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(visibleLines) { line ->
-                    Text(
-                        text = line,
-                        color = Color(0xFFE6EDF3),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
-            }
+        items(count = visibleLineCount) { index ->
+            Text(
+                text = lines[firstVisibleLine + index],
+                color = Color(0xFFE6EDF3),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+            )
         }
     }
 }
+
+private const val MAX_VISIBLE_LOG_LINES = 80
