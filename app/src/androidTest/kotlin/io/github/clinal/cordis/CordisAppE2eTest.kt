@@ -43,7 +43,9 @@ class CordisAppE2eTest {
             composeRule.onNodeWithTag("cordis.addInstance").assertIsEnabled()
 
             composeRule.onNodeWithTag("cordis.addInstance").performClick()
-
+            composeRule.waitUntilAtLeastOneExists("cordis.createInstance.confirm", FIRST_RUN_TIMEOUT_MILLIS)
+            composeRule.onNodeWithTag("cordis.createInstance.confirm").performClick()
+            composeRule.waitUntilAtLeastOneExists("cordis.instance.instance-1", FIRST_RUN_TIMEOUT_MILLIS)
             composeRule.onNodeWithTag("cordis.instance.instance-1").assertIsDisplayed()
             composeRule.onNodeWithTag("cordis.instance.instance-1.start").performClick()
 

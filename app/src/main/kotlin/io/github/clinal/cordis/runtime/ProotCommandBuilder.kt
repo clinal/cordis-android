@@ -1,7 +1,11 @@
 package io.github.clinal.cordis.runtime
 
 class ProotCommandBuilder(private val paths: RuntimePaths) {
-    fun cordisCommand(instanceId: String, environment: Map<String, String> = emptyMap()): List<String> {
+    fun cordisCommand(
+        instanceId: String,
+        startCommand: String,
+        environment: Map<String, String> = emptyMap(),
+    ): List<String> {
         val exports = environment.entries.joinToString("\n") { (key, value) ->
             "export $key=${value.shellQuote()}"
         }
@@ -12,7 +16,7 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
                 trap : SIGINT
                 echo __PID__: ${'$'}${'$'}
                 $exports
-                cd /home && PROOT_TMP_DIR=/tmp yarn start
+                cd /home && PROOT_TMP_DIR=/tmp sh -lc ${startCommand.shellQuote()}
                 status=${'$'}?
                 echo __STATUS__: ${'$'}status
                 echo -e '\n[Process exited.]\n\n'

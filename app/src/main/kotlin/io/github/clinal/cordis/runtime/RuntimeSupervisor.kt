@@ -50,7 +50,9 @@ class RuntimeSupervisor(
                 }
 
                 instanceRepository.updateStatus(instanceId, RuntimeStatus.Starting, "Preparing Cordis runtime.")
-                installer.prepare(instanceId, instance.port) { line -> instanceRepository.appendLog(instanceId, line) }
+                installer.prepare(instanceId, instance.port, instance.patchPort) { line ->
+                    instanceRepository.appendLog(instanceId, line)
+                }
                 if (deletingInstances.contains(instanceId)) {
                     return@launch
                 }
@@ -65,7 +67,7 @@ class RuntimeSupervisor(
                 }
                 val dns = instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }
 
-                instanceRepository.appendLog(instanceId, "Starting Cordis with yarn start.")
+                instanceRepository.appendLog(instanceId, "Starting Cordis with ${instance.startCommand}.")
                 val bridgeServer = AndroidBridgeServer(
                     instanceId = instanceId,
                     controlEnabled = instance.androidControlEnabled,
@@ -78,6 +80,7 @@ class RuntimeSupervisor(
                 }
                 val command = commandBuilder.cordisCommand(
                     instanceId = instanceId,
+                    startCommand = instance.startCommand,
                     environment = bridgeServer.environment,
                 )
                 val process = ProcessBuilder(command)
