@@ -107,7 +107,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
         val installer = RuntimeInstaller(app)
         val paths = RuntimePaths(app)
 
-        installer.prepare(instance.id, instance.port)
+        installer.prepare(instance.id, instance.port, patchPort = false)
         check(installer.isBootstrapInstalled()) {
             "Runtime bootstrap assets are not packaged in this build."
         }

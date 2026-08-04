@@ -1,6 +1,7 @@
 package io.github.clinal.cordis.runtime
 
 import android.content.Context
+import android.net.Uri
 import android.system.Os
 import android.util.Log
 import java.io.File
@@ -12,13 +13,48 @@ class RuntimeInstaller(context: Context) {
     private val appContext = context.applicationContext
     private val paths = RuntimePaths(appContext)
 
-    fun prepare(instanceId: String, port: Int, onProgress: (String) -> Unit = {}) {
+    fun prepare(instanceId: String, port: Int, patchPort: Boolean, onProgress: (String) -> Unit = {}) {
         paths.home.resolve("instances").mkdirs()
         paths.instanceHome(instanceId).mkdirs()
 
         val instanceHome = paths.instanceHome(instanceId)
         seedInstanceTemplate(instanceHome, onProgress)
-        ensureAppPortConfig(instanceHome, port, onProgress)
+        if (patchPort) ensureAppPortConfig(instanceHome, port, onProgress)
+    }
+
+    fun installCustomPackage(
+        instanceId: String,
+        packageUri: Uri,
+        onProgress: (String) -> Unit = {},
+    ) {
+        val instanceHome = paths.instanceHome(instanceId)
+        val instancesHome = requireNotNull(instanceHome.parentFile) { "Instance directory has no parent." }
+        val staging = instancesHome.resolve(".${instanceHome.name}-staging")
+        staging.deleteRecursively()
+        check(staging.mkdirs()) { "Cannot create package staging directory." }
+
+        try {
+            onProgress("Extracting custom package.")
+            val input = appContext.contentResolver.openInputStream(packageUri)
+                ?: error("Cannot open the selected package.")
+            input.use { stream ->
+                ZipInputStream(stream.buffered()).use { zip ->
+                    generateSequence { zip.nextEntry }.forEach { entry ->
+                        writeZipEntry(staging, entry.name, entry.isDirectory, zip)
+                        zip.closeEntry()
+                    }
+                }
+            }
+            staging.resolve(TEMPLATE_MARKER).writeText("custom\n")
+            if (instanceHome.exists() && !instanceHome.deleteRecursively()) {
+                error("Cannot replace the instance directory.")
+            }
+            check(staging.renameTo(instanceHome)) { "Cannot install the custom package." }
+            onProgress("Custom package installed.")
+        } catch (error: Throwable) {
+            staging.deleteRecursively()
+            throw error
+        }
     }
 
     fun prepareBootstrap(onProgress: (String) -> Unit = {}) {
@@ -102,7 +138,7 @@ class RuntimeInstaller(context: Context) {
     }
 
     private fun seedInstanceTemplate(instanceHome: File, onProgress: (String) -> Unit) {
-        val marker = instanceHome.resolve(".cordis-android-template")
+        val marker = instanceHome.resolve(TEMPLATE_MARKER)
         if (marker.exists()) return
 
         onProgress("Seeding Cordis project template.")
@@ -280,6 +316,7 @@ class RuntimeInstaller(context: Context) {
         private const val EXECUTABLE_MODE = 448
         private const val PROGRESS_INTERVAL = 500
         private const val SYMLINK_SEPARATOR = '←'
+        private const val TEMPLATE_MARKER = ".cordis-android-template"
     }
 }
 
