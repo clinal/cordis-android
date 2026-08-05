@@ -26,6 +26,8 @@ class InstanceRepository(context: Context) {
     @Synchronized
     fun addInstance(
         name: String? = null,
+        port: Int? = null,
+        androidControlEnabled: Boolean = false,
         hasWebService: Boolean = true,
         patchPort: Boolean = hasWebService,
         startCommand: String = DEFAULT_START_COMMAND,
@@ -36,9 +38,9 @@ class InstanceRepository(context: Context) {
         val instance = CordisInstance(
             id = id,
             name = name?.trim().takeUnless { it.isNullOrEmpty() } ?: "instance $nextIndex",
-            port = nextAvailablePort(currentInstances),
+            port = port?.coerceIn(MIN_PORT, MAX_PORT) ?: nextAvailablePort(currentInstances),
             dns = DEFAULT_DNS,
-            androidControlEnabled = false,
+            androidControlEnabled = androidControlEnabled,
             hasWebService = hasWebService,
             patchPort = hasWebService && patchPort,
             startCommand = sanitizeStartCommand(startCommand),
@@ -56,6 +58,8 @@ class InstanceRepository(context: Context) {
         }
         return instance
     }
+
+    fun suggestedPort(): Int = nextAvailablePort(mutableInstances.value)
 
     fun removeInstance(id: String) {
         preferences.edit().putStringSet(KEY_INSTANCE_IDS, currentIds() - id).apply()

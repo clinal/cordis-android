@@ -1,10 +1,13 @@
 package io.github.clinal.cordis.ui
 
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,16 +37,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.github.clinal.cordis.CordisApplication
 import io.github.clinal.cordis.data.InstanceRepository
+import io.github.clinal.cordis.runtime.AndroidControlShell
 import io.github.clinal.cordis.runtime.RuntimeInstaller
 import io.github.clinal.cordis.ui.theme.CordisTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import rikka.shizuku.Shizuku
 
 class CreateInstanceActivity : ComponentActivity() {
     private var packageUri by mutableStateOf<Uri?>(null)
@@ -51,6 +57,17 @@ class CreateInstanceActivity : ComponentActivity() {
     private var creating by mutableStateOf(false)
     private var progress by mutableStateOf("")
     private var errorMessage by mutableStateOf<String?>(null)
+    private var pendingCreate: PendingCreate? = null
+    private val permissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, result ->
+        if (requestCode != SHIZUKU_PERMISSION_REQUEST_CODE) return@OnRequestPermissionResultListener
+        if (result == PackageManager.PERMISSION_GRANTED) {
+            pendingCreate?.let(::verifyAndCreate)
+        } else {
+            pendingCreate = null
+            creating = false
+            errorMessage = "Shizuku permission was denied. Grant cordis-android access in Shizuku, then create again."
+        }
+    }
 
     private val packagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
@@ -63,6 +80,8 @@ class CreateInstanceActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Shizuku.addRequestPermissionResultListener(permissionResultListener)
+        val repository = (application as CordisApplication).instanceRepository
         setContent {
             CordisTheme {
                 CreateInstanceScreen(
@@ -70,6 +89,7 @@ class CreateInstanceActivity : ComponentActivity() {
                     creating = creating,
                     progress = progress,
                     errorMessage = errorMessage,
+                    suggestedPort = repository.suggestedPort(),
                     onBack = ::finish,
                     onSelectPackage = { packagePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
                     onCreate = ::createInstance,
@@ -78,9 +98,16 @@ class CreateInstanceActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        Shizuku.removeRequestPermissionResultListener(permissionResultListener)
+        super.onDestroy()
+    }
+
     private fun createInstance(
         name: String,
         useCustomPackage: Boolean,
+        port: Int,
+        androidControlEnabled: Boolean,
         hasWebService: Boolean,
         patchPort: Boolean,
         startCommand: String,
@@ -91,20 +118,91 @@ class CreateInstanceActivity : ComponentActivity() {
             return
         }
 
+        val config = PendingCreate(
+            name,
+            useCustomPackage,
+            port,
+            androidControlEnabled,
+            hasWebService,
+            patchPort,
+            startCommand,
+        )
+        if (androidControlEnabled) {
+            validateShizukuAndCreate(config)
+        } else {
+            persist(config)
+        }
+    }
+
+    private fun validateShizukuAndCreate(config: PendingCreate) {
+        errorMessage = null
+        try {
+            when {
+                !Shizuku.pingBinder() -> errorMessage =
+                    "Cannot enable Android control because Shizuku is not running. Start Shizuku, then create again."
+                Shizuku.isPreV11() -> errorMessage =
+                    "Cannot enable Android control because Shizuku 11 or newer is required."
+                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED -> verifyAndCreate(config)
+                Shizuku.shouldShowRequestPermissionRationale() -> errorMessage =
+                    "Shizuku permission is required. Grant cordis-android access in Shizuku, then create again."
+                else -> {
+                    pendingCreate = config
+                    Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
+                }
+            }
+        } catch (error: Exception) {
+            pendingCreate = null
+            errorMessage = "Unable to check Shizuku: ${error.message ?: error.javaClass.simpleName}."
+            Log.e(TAG, "Unable to check Shizuku", error)
+        }
+    }
+
+    private fun verifyAndCreate(config: PendingCreate) {
+        pendingCreate = config
         creating = true
         errorMessage = null
+        progress = "Connecting to the Shizuku Android control service…"
+        lifecycleScope.launch {
+            val verification = withContext(Dispatchers.IO) {
+                runCatching {
+                    val shell = AndroidControlShell(applicationContext)
+                    try {
+                        shell.execute("true")
+                    } finally {
+                        shell.close()
+                    }
+                }
+            }
+            verification.onFailure { error ->
+                pendingCreate = null
+                creating = false
+                errorMessage = "Could not connect to the Shizuku Android control service: " +
+                    (error.message ?: error.javaClass.simpleName)
+                return@launch
+            }
+            persist(config)
+        }
+    }
+
+    private fun persist(config: PendingCreate) {
+        pendingCreate = null
+        creating = true
+        errorMessage = null
+        val selectedPackage = packageUri
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val app = application as CordisApplication
                     val instance = app.instanceRepository.addInstance(
-                        name,
-                        hasWebService,
-                        patchPort,
-                        startCommand,
+                        name = config.name,
+                        port = config.port,
+                        androidControlEnabled = config.androidControlEnabled,
+                        hasWebService = config.hasWebService,
+                        patchPort = config.patchPort,
+                        startCommand = config.startCommand,
                     )
                     try {
-                        if (selectedPackage != null && useCustomPackage) {
+                        if (selectedPackage != null && config.useCustomPackage) {
                             RuntimeInstaller(app).installCustomPackage(
                                 instanceId = instance.id,
                                 packageUri = selectedPackage,
@@ -134,11 +232,14 @@ private fun CreateInstanceScreen(
     creating: Boolean,
     progress: String,
     errorMessage: String?,
+    suggestedPort: Int,
     onBack: () -> Unit,
     onSelectPackage: () -> Unit,
     onCreate: (
         name: String,
         useCustomPackage: Boolean,
+        port: Int,
+        androidControlEnabled: Boolean,
         hasWebService: Boolean,
         patchPort: Boolean,
         startCommand: String,
@@ -146,11 +247,15 @@ private fun CreateInstanceScreen(
 ) {
     var name by androidx.compose.runtime.remember { mutableStateOf("") }
     var useCustomPackage by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var portText by androidx.compose.runtime.remember(suggestedPort) { mutableStateOf(suggestedPort.toString()) }
+    var androidControlEnabled by androidx.compose.runtime.remember { mutableStateOf(false) }
     var hasWebService by androidx.compose.runtime.remember { mutableStateOf(true) }
     var patchPort by androidx.compose.runtime.remember { mutableStateOf(true) }
     var startCommand by androidx.compose.runtime.remember {
         mutableStateOf(InstanceRepository.DEFAULT_START_COMMAND)
     }
+    val port = portText.toIntOrNull()
+    val portIsValid = !hasWebService || port != null && port in 1024..65535
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -206,6 +311,14 @@ private fun CreateInstanceScreen(
             }
 
             BooleanOption(
+                checked = androidControlEnabled,
+                title = "Android control",
+                description = "Allow this instance to control the device through Shizuku.",
+                enabled = !creating,
+                onCheckedChange = { androidControlEnabled = it },
+            )
+
+            BooleanOption(
                 checked = hasWebService,
                 title = "Web service",
                 description = "Show the WebView action for this instance.",
@@ -216,6 +329,16 @@ private fun CreateInstanceScreen(
                 },
             )
             if (hasWebService) {
+                OutlinedTextField(
+                    value = portText,
+                    onValueChange = { portText = it.filter(Char::isDigit).take(5) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !creating,
+                    singleLine = true,
+                    label = { Text("Port") },
+                    isError = portText.isNotBlank() && !portIsValid,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
                 BooleanOption(
                     checked = patchPort,
                     title = "Patch port on start",
@@ -246,15 +369,36 @@ private fun CreateInstanceScreen(
             Button(
                 modifier = Modifier.testTag("cordis.createInstance.confirm"),
                 onClick = {
-                    onCreate(name, useCustomPackage, hasWebService, patchPort, startCommand)
+                    onCreate(
+                        name,
+                        useCustomPackage,
+                        port ?: suggestedPort,
+                        androidControlEnabled,
+                        hasWebService,
+                        patchPort,
+                        startCommand,
+                    )
                 },
-                enabled = !creating && (!useCustomPackage || packageName != null),
+                enabled = !creating && portIsValid && (!useCustomPackage || packageName != null),
             ) {
                 Text("Create")
             }
         }
     }
 }
+
+private data class PendingCreate(
+    val name: String,
+    val useCustomPackage: Boolean,
+    val port: Int,
+    val androidControlEnabled: Boolean,
+    val hasWebService: Boolean,
+    val patchPort: Boolean,
+    val startCommand: String,
+)
+
+private const val SHIZUKU_PERMISSION_REQUEST_CODE = 1002
+private const val TAG = "CreateInstance"
 
 @Composable
 private fun BooleanOption(
