@@ -14,7 +14,13 @@ buildEnv {
     login
     env
     certs
+    bash
     busybox
+    ripgrep
+    jq
+    curl
+    git
+    gh
     zip
     pnpm
     yarn-berry
