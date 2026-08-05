@@ -50,6 +50,8 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
             paths.proot.absolutePath,
             "-r",
             "${paths.root.absolutePath}$envRoot",
+            "-w",
+            "/home",
             "-b",
             "${paths.tmp.absolutePath}:/tmp",
             "-b",
