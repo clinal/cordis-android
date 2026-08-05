@@ -30,6 +30,7 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         return prootCommandPrefix(instanceId) + listOf(
             "/bin/sh",
             "/bin/login",
+            "-i",
         )
     }
 
