@@ -586,7 +586,6 @@ private val RuntimeStatus.canStart: Boolean
 @Composable
 fun InstanceSettingsPanel(
     instance: CordisInstance,
-    androidControlError: String? = null,
     onSave: (
         name: String,
         port: Int,
@@ -647,13 +646,6 @@ fun InstanceSettingsPanel(
                 Switch(
                     checked = androidControlEnabled,
                     onCheckedChange = { androidControlEnabled = it },
-                )
-            }
-            androidControlError?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
                 )
             }
             SettingsSwitch(
