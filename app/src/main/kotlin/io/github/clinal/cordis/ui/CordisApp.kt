@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -46,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -338,16 +343,35 @@ private fun InstancePanel(
     onRemove: () -> Unit,
 ) {
     var autoScroll by remember(instance.id) { mutableStateOf(true) }
+    var logSelectionKey by remember(instance.id) { mutableStateOf(0) }
 
     Card(
         modifier = Modifier
             .testTag("cordis.instance.${instance.id}")
-            .combinedClickable(
-                enabled = actionsEnabled,
-                onClick = {},
-                onLongClick = onRemove,
-                onLongClickLabel = "Remove ${instance.name}",
-            ),
+            .pointerInput(instance.id) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial,
+                    )
+                    var isTap = true
+                    var change = down
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                            isTap = false
+                        }
+                    } while (change.pressed)
+
+                    if (
+                        isTap &&
+                        change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis
+                    ) {
+                        logSelectionKey++
+                    }
+                }
+            },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
@@ -357,96 +381,110 @@ private fun InstancePanel(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        enabled = actionsEnabled,
+                        onClick = { logSelectionKey++ },
+                        onLongClick = onRemove,
+                        onLongClickLabel = "Remove ${instance.name}",
+                    ),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = instance.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (instance.hasWebService) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = instance.consoleUrl,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = instance.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (instance.hasWebService) {
+                            Text(
+                                text = instance.consoleUrl,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
+                    StatusChip(instance.status)
                 }
-                StatusChip(instance.status)
-            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { autoScroll = !autoScroll }, enabled = actionsEnabled) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (autoScroll) {
-                            "Disable ${instance.name} log auto-scroll"
-                        } else {
-                            "Enable ${instance.name} log auto-scroll"
-                        },
-                        tint = if (autoScroll) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                    )
-                }
-                if (instance.hasWebService) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { autoScroll = !autoScroll }, enabled = actionsEnabled) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (autoScroll) {
+                                "Disable ${instance.name} log auto-scroll"
+                            } else {
+                                "Enable ${instance.name} log auto-scroll"
+                            },
+                            tint = if (autoScroll) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
+                    if (instance.hasWebService) {
+                        IconButton(
+                            onClick = onOpenConsole,
+                            enabled = actionsEnabled && instance.status == RuntimeStatus.Running,
+                        ) {
+                            Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
+                        }
+                    }
+                    IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
+                        Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
+                    }
                     IconButton(
-                        onClick = onOpenConsole,
-                        enabled = actionsEnabled && instance.status == RuntimeStatus.Running,
+                        modifier = Modifier.testTag("cordis.instance.${instance.id}.start"),
+                        onClick = onStart,
+                        enabled = actionsEnabled && instance.status.canStart,
                     ) {
-                        Icon(Icons.Default.Language, contentDescription = "Open ${instance.name} console")
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
+                    }
+                    IconButton(
+                        modifier = Modifier.testTag("cordis.instance.${instance.id}.stop"),
+                        onClick = onStop,
+                        enabled = actionsEnabled,
+                    ) {
+                        Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
+                    }
+                    IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
+                        Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
                     }
                 }
-                IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
-                    Icon(Icons.Default.Terminal, contentDescription = "Open ${instance.name} terminal")
+
+                if (instance.status == RuntimeStatus.Starting) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
-                IconButton(
-                    modifier = Modifier.testTag("cordis.instance.${instance.id}.start"),
-                    onClick = onStart,
-                    enabled = actionsEnabled && instance.status.canStart,
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Start ${instance.name}")
-                }
-                IconButton(
-                    modifier = Modifier.testTag("cordis.instance.${instance.id}.stop"),
-                    onClick = onStop,
-                    enabled = actionsEnabled,
-                ) {
-                    Icon(Icons.Default.Stop, contentDescription = "Stop ${instance.name}")
-                }
-                IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
-                    Icon(Icons.Default.Settings, contentDescription = "Configure ${instance.name}")
-                }
+
+                AndroidBridgePanel(
+                    instance = instance,
+                    homeShortcuts = homeShortcuts,
+                    actionsEnabled = actionsEnabled,
+                    onClickBridgeButton = onClickBridgeButton,
+                    onAddHomeShortcut = onAddHomeShortcut,
+                    onRemoveHomeShortcut = onRemoveHomeShortcut,
+                )
             }
 
-            if (instance.status == RuntimeStatus.Starting) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            key(logSelectionKey) {
+                LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
             }
-
-            AndroidBridgePanel(
-                instance = instance,
-                homeShortcuts = homeShortcuts,
-                actionsEnabled = actionsEnabled,
-                onClickBridgeButton = onClickBridgeButton,
-                onAddHomeShortcut = onAddHomeShortcut,
-                onRemoveHomeShortcut = onRemoveHomeShortcut,
-            )
-
-            LogPanel(lines = instance.lastLogLines, autoScroll = autoScroll)
         }
     }
 }
@@ -786,7 +824,7 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
     val firstVisibleLine = (lines.size - MAX_VISIBLE_LOG_LINES).coerceAtLeast(0)
     val visibleLineCount = lines.size - firstVisibleLine
 
-    LaunchedEffect(autoScroll, lines.size) {
+    LaunchedEffect(autoScroll, lines.size, lines.lastOrNull()) {
         if (autoScroll && visibleLineCount > 0) {
             // Schedule the tail position for the next remeasure. A synchronous scroll can
             // collide with Compose's current measure/layout pass when a process starts.
@@ -794,22 +832,24 @@ private fun LogPanel(lines: List<String>, autoScroll: Boolean) {
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(220.dp)
-            .background(Color(0xFF101418))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        items(count = visibleLineCount) { index ->
-            Text(
-                text = lines[firstVisibleLine + index],
-                color = Color(0xFFE6EDF3),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-            )
+    SelectionContainer {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .background(Color(0xFF101418))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items(count = visibleLineCount) { index ->
+                Text(
+                    text = lines[firstVisibleLine + index],
+                    color = Color(0xFFE6EDF3),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
     }
 }

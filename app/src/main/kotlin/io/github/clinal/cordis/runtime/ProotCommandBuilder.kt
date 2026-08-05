@@ -6,23 +6,9 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         startCommand: String,
         environment: Map<String, String> = emptyMap(),
     ): List<String> {
-        val exports = environment.entries.joinToString("\n") { (key, value) ->
-            "export $key=${value.shellQuote()}"
-        }
         return shellCommand(
             instanceId = instanceId,
-            command = """
-                setsid sh <<'CORDIS_EOF'
-                trap : SIGINT
-                echo __PID__: ${'$'}${'$'}
-                $exports
-                cd /home && PROOT_TMP_DIR=/tmp sh -lc ${startCommand.shellQuote()}
-                status=${'$'}?
-                echo __STATUS__: ${'$'}status
-                echo -e '\n[Process exited.]\n\n'
-                exit ${'$'}status
-                CORDIS_EOF
-            """.trimIndent(),
+            command = cordisProcessCommand(startCommand, environment),
         )
     }
 
@@ -71,7 +57,28 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         )
     }
 
-    private fun String.shellQuote(): String {
-        return "'${replace("'", "'\"'\"'")}'"
+}
+
+internal fun cordisProcessCommand(
+    startCommand: String,
+    environment: Map<String, String>,
+): String {
+    val exports = environment.entries.joinToString("\n") { (key, value) ->
+        "export $key=${value.shellQuote()}"
     }
+    val script = """
+        trap : SIGINT
+        echo __PID__: ${'$'}${'$'}
+        $exports
+        cd /home && PROOT_TMP_DIR=/tmp sh -lc ${startCommand.shellQuote()}
+        status=${'$'}?
+        echo __STATUS__: ${'$'}status
+        echo -e '\n[Process exited.]\n\n'
+        exit ${'$'}status
+    """.trimIndent()
+    return "setsid sh -c ${script.shellQuote()}"
+}
+
+private fun String.shellQuote(): String {
+    return "'${replace("'", "'\"'\"'")}'"
 }
