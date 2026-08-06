@@ -1,5 +1,7 @@
 package io.github.clinal.cordis.runtime
 
+import java.io.File
+
 class ProotCommandBuilder(private val paths: RuntimePaths) {
     fun cordisCommand(
         instanceId: String,
@@ -29,8 +31,23 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         )
     }
 
+    fun packageExtractionCommand(target: File, archive: File): List<String> {
+        return prootCommandPrefix(target) + listOf(
+            "-b",
+            "${archive.absolutePath}:$PACKAGE_ARCHIVE_PATH",
+            "/bin/unzip",
+            "-q",
+            PACKAGE_ARCHIVE_PATH,
+            "-d",
+            "/home",
+        )
+    }
+
     private fun prootCommandPrefix(instanceId: String): List<String> {
-        val instanceHome = paths.instanceHome(instanceId)
+        return prootCommandPrefix(paths.instanceHome(instanceId))
+    }
+
+    private fun prootCommandPrefix(instanceHome: File): List<String> {
         val envRoot = paths.envFile.readText().trim()
         return listOf(
             paths.proot.absolutePath,
@@ -57,6 +74,9 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         )
     }
 
+    private companion object {
+        const val PACKAGE_ARCHIVE_PATH = "/tmp/cordis-package.zip"
+    }
 }
 
 internal fun cordisProcessCommand(
