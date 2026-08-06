@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -44,7 +45,9 @@ class CordisAppE2eTest {
 
             composeRule.onNodeWithTag("cordis.addInstance").performClick()
             composeRule.waitUntilAtLeastOneExists("cordis.createInstance.confirm", FIRST_RUN_TIMEOUT_MILLIS)
-            composeRule.onNodeWithTag("cordis.createInstance.confirm").performClick()
+            composeRule.onNodeWithTag("cordis.createInstance.confirm")
+                .performScrollTo()
+                .performClick()
             composeRule.waitUntilAtLeastOneExists("cordis.instance.instance-1", FIRST_RUN_TIMEOUT_MILLIS)
             composeRule.onNodeWithTag("cordis.instance.instance-1").assertIsDisplayed()
             composeRule.onNodeWithTag("cordis.instance.instance-1.start").performClick()

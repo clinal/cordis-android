@@ -67,6 +67,17 @@ class RuntimeSupervisor(
                 }
                 val dns = instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }
 
+                if (instance.androidControlEnabled) {
+                    instanceRepository.appendLog(instanceId, "Checking Shizuku Android control service.")
+                    val shell = AndroidControlShell(appContext)
+                    try {
+                        shell.execute("true")
+                    } finally {
+                        shell.close()
+                    }
+                    instanceRepository.appendLog(instanceId, "Shizuku Android control service is ready.")
+                }
+
                 instanceRepository.appendLog(instanceId, "Starting Cordis with ${instance.startCommand}.")
                 val bridgeServer = AndroidBridgeServer(
                     instanceId = instanceId,
