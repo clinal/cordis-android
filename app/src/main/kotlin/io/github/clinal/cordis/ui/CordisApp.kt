@@ -85,7 +85,16 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
     val homeShortcuts by viewModel.homeShortcuts.collectAsState()
     val bootstrapInstallState by viewModel.bootstrapInstallState.collectAsState()
     var pendingDelete by remember { mutableStateOf<CordisInstance?>(null) }
+    var deletingInstanceId by remember { mutableStateOf<String?>(null) }
     val actionsEnabled = !bootstrapInstallState.installing
+
+    LaunchedEffect(instances, deletingInstanceId) {
+        val deletingId = deletingInstanceId ?: return@LaunchedEffect
+        if (instances.none { it.id == deletingId }) {
+            deletingInstanceId = null
+            pendingDelete = null
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -159,10 +168,15 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
     if (actionsEnabled) pendingDelete?.let { instance ->
         DeleteInstanceDialog(
             instance = instance,
-            onDismiss = { pendingDelete = null },
+            deleting = deletingInstanceId == instance.id,
+            onDismiss = {
+                if (deletingInstanceId == null) pendingDelete = null
+            },
             onConfirm = {
-                viewModel.removeInstance(instance.id)
-                pendingDelete = null
+                if (deletingInstanceId == null) {
+                    deletingInstanceId = instance.id
+                    viewModel.removeInstance(instance.id)
+                }
             },
         )
     }
@@ -735,20 +749,31 @@ private fun SettingsSwitch(
 @Composable
 private fun DeleteInstanceDialog(
     instance: CordisInstance,
+    deleting: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Delete ${instance.name}?") },
-        text = { Text("This removes the instance and deletes its files.") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    if (deleting) "Deleting instance and its files…"
+                    else "This removes the instance and deletes its files.",
+                )
+                if (deleting) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Delete")
+            TextButton(onClick = onConfirm, enabled = !deleting) {
+                Text(if (deleting) "Deleting…" else "Delete")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !deleting) {
                 Text("Cancel")
             }
         },
