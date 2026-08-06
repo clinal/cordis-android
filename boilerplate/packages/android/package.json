@@ -1,6 +1,6 @@
 {
   "name": "cordis-plugin-android",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Cordis plugin for communicating with the cordis-android host.",
   "type": "module",
   "main": "lib/index.js",
