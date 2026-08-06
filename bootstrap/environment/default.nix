@@ -22,6 +22,7 @@ buildEnv {
     git
     gh
     zip
+    unzip
     pnpm
     yarn-berry
     nodejs-slim_26
