@@ -160,10 +160,10 @@ class RuntimeSupervisor(
     }
 
     fun remove(instanceId: String) {
+        if (!deletingInstances.add(instanceId)) return
         instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             try {
-                deletingInstances.add(instanceId)
                 stopProcess(instanceId)
                 startJobs[instanceId]?.join()
                 instanceRepository.removeInstance(instanceId)
