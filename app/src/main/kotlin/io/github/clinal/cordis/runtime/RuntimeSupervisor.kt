@@ -25,7 +25,7 @@ class RuntimeSupervisor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processes = ConcurrentHashMap<String, Process>()
     private val prootPids = ConcurrentHashMap<String, Int>()
-    private val activeStarts = ConcurrentHashMap.newKeySet<String>()
+    private val startGate = RuntimeStartGate()
     private val stoppingInstances = ConcurrentHashMap.newKeySet<String>()
     private val deletingInstances = ConcurrentHashMap.newKeySet<String>()
     private val startJobs = ConcurrentHashMap<String, Job>()
@@ -37,7 +37,15 @@ class RuntimeSupervisor(
 
     fun start(instanceId: String) {
         if (deletingInstances.contains(instanceId)) return
-        if (!activeStarts.add(instanceId)) return
+        if (!startGate.request(instanceId)) return
+        launchStart(instanceId)
+    }
+
+    private fun launchStart(instanceId: String) {
+        if (deletingInstances.contains(instanceId)) {
+            startGate.release(instanceId)
+            return
+        }
         instanceRepository.setAutoStart(instanceId, true)
 
         val job = scope.launch(start = CoroutineStart.LAZY) {
@@ -138,8 +146,10 @@ class RuntimeSupervisor(
                 prootPids.remove(instanceId)
                 bridgeServers.remove(instanceId)?.stop()
                 stoppingInstances.remove(instanceId)
-                activeStarts.remove(instanceId)
                 startJobs.remove(instanceId)
+                if (startGate.finish(instanceId)) {
+                    launchStart(instanceId)
+                }
             }
         }
         startJobs[instanceId] = job
@@ -148,6 +158,7 @@ class RuntimeSupervisor(
     }
 
     fun stop(instanceId: String) {
+        startGate.cancelPending(instanceId)
         instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             stopProcess(instanceId)
@@ -161,6 +172,7 @@ class RuntimeSupervisor(
 
     fun remove(instanceId: String) {
         if (!deletingInstances.add(instanceId)) return
+        startGate.cancelPending(instanceId)
         instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             try {
