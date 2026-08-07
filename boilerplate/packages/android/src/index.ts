@@ -368,8 +368,12 @@ export class AndroidBridge {
       ))
     }
     const id = ++this.requestId
-    this.send({ jsonrpc: '2.0', id, method, params })
-    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }))
+    return new Promise((resolve, reject) => {
+      // Register before writing: a local socket can deliver the response before
+      // write() returns, especially during the initial hello handshake.
+      this.pending.set(id, { resolve, reject })
+      this.send({ jsonrpc: '2.0', id, method, params })
+    })
   }
 
   private sendNotification(method: string, params: unknown): void {
