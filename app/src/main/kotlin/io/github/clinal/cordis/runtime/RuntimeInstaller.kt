@@ -27,24 +27,39 @@ class RuntimeInstaller(context: Context) {
         packageUri: Uri,
         onProgress: (String) -> Unit = {},
     ) {
+        prepareBootstrap(onProgress)
+        check(isBootstrapInstalled()) { "Runtime bootstrap is not installed." }
+
         val instanceHome = paths.instanceHome(instanceId)
         val instancesHome = requireNotNull(instanceHome.parentFile) { "Instance directory has no parent." }
         val staging = instancesHome.resolve(".${instanceHome.name}-staging")
+        val archive = instancesHome.resolve(".${instanceHome.name}-package.zip")
         staging.deleteRecursively()
+        archive.delete()
         check(staging.mkdirs()) { "Cannot create package staging directory." }
 
         try {
-            onProgress("Extracting custom package.")
+            onProgress("Copying custom package.")
             val input = appContext.contentResolver.openInputStream(packageUri)
                 ?: error("Cannot open the selected package.")
             input.use { stream ->
-                ZipInputStream(stream.buffered()).use { zip ->
-                    generateSequence { zip.nextEntry }.forEach { entry ->
-                        writeZipEntry(staging, entry.name, entry.isDirectory, zip)
-                        zip.closeEntry()
-                    }
-                }
+                archive.outputStream().use { output -> stream.copyTo(output) }
             }
+
+            onProgress("Extracting custom package.")
+            val processBuilder = ProcessBuilder(
+                ProotCommandBuilder(paths).packageExtractionCommand(staging, archive),
+            )
+            processBuilder.environment()["PROOT_TMP_DIR"] = paths.tmp.absolutePath
+            val process = processBuilder
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                error("Cannot extract the custom package (exit $exitCode): ${output.trim()}")
+            }
+
             staging.resolve(TEMPLATE_MARKER).writeText("custom\n")
             if (instanceHome.exists() && !instanceHome.deleteRecursively()) {
                 error("Cannot replace the instance directory.")
@@ -54,6 +69,8 @@ class RuntimeInstaller(context: Context) {
         } catch (error: Throwable) {
             staging.deleteRecursively()
             throw error
+        } finally {
+            archive.delete()
         }
     }
 
