@@ -1,4 +1,4 @@
-{ writeScriptBin }:
+{ gperftools, writeScriptBin }:
 
 writeScriptBin "login" ''
   set -e
@@ -17,6 +17,7 @@ writeScriptBin "login" ''
 
   export PATH=/bin
   export HOME=/home
+  export LD_PRELOAD=${gperftools}/lib/libtcmalloc_minimal.so
 
   cd "$HOME"
   exec sh "$@"
