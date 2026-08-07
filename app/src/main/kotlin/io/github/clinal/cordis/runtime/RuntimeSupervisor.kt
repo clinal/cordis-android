@@ -29,7 +29,7 @@ class RuntimeSupervisor(
     private val stoppingInstances = ConcurrentHashMap.newKeySet<String>()
     private val deletingInstances = ConcurrentHashMap.newKeySet<String>()
     private val startJobs = ConcurrentHashMap<String, Job>()
-    private val bridgeServers = ConcurrentHashMap<String, AndroidBridgeServer>()
+    private val bridgeListener = AndroidBridgeListener(appContext, instanceRepository, scope)
 
     fun restoreAutoStartedInstances() {
         instanceRepository.autoStartInstanceIds().forEach(::start)
@@ -37,12 +37,13 @@ class RuntimeSupervisor(
 
     fun start(instanceId: String) {
         if (deletingInstances.contains(instanceId)) return
-        closeBridge(instanceId)
         if (!activeStarts.add(instanceId)) return
+        bridgeListener.unregister(instanceId)
         instanceRepository.setAutoStart(instanceId, true)
 
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var outcome: RuntimeOutcome? = null
+            var bridgeSession: AndroidBridgeServer? = null
             try {
                 val instance = instanceRepository.instance(instanceId)
                 if (instance == null) {
@@ -78,16 +79,8 @@ class RuntimeSupervisor(
                 }
 
                 instanceRepository.appendLog(instanceId, "Starting Cordis with ${instance.startCommand}.")
-                val bridgeServer = AndroidBridgeServer(
-                    instanceId = instanceId,
-                    controlEnabled = instance.androidControlEnabled,
-                    context = appContext,
-                    instanceRepository = instanceRepository,
-                    parentScope = scope,
-                ).also { bridge ->
-                    bridgeServers[instanceId] = bridge
-                    bridge.start()
-                }
+                val bridgeServer = bridgeListener.register(instanceId, instance.androidControlEnabled)
+                bridgeSession = bridgeServer
                 val command = commandBuilder.cordisCommand(
                     instanceId = instanceId,
                     startCommand = instance.startCommand,
@@ -130,7 +123,7 @@ class RuntimeSupervisor(
                     "Runtime start failed: ${error.message ?: error.javaClass.simpleName}.",
                 )
             } finally {
-                closeBridge(instanceId)
+                bridgeSession?.let { bridgeListener.unregister(instanceId, it) }
                 processes.remove(instanceId)
                 prootPids.remove(instanceId)
                 stoppingInstances.remove(instanceId)
@@ -148,7 +141,7 @@ class RuntimeSupervisor(
     }
 
     fun stop(instanceId: String) {
-        closeBridge(instanceId)
+        bridgeListener.unregister(instanceId)
         instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             stopProcess(instanceId)
@@ -156,13 +149,12 @@ class RuntimeSupervisor(
     }
 
     fun clickBridgeButton(instanceId: String, buttonId: String) {
-        bridgeServers[instanceId]?.click(buttonId)
-            ?: instanceRepository.appendLog(instanceId, "Android bridge is not connected; cannot trigger button $buttonId.")
+        bridgeListener.click(instanceId, buttonId)
     }
 
     fun remove(instanceId: String) {
         if (!deletingInstances.add(instanceId)) return
-        closeBridge(instanceId)
+        bridgeListener.unregister(instanceId)
         instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             try {
@@ -200,10 +192,6 @@ class RuntimeSupervisor(
             process.destroyForcibly()
             instanceRepository.appendLog(instanceId, "Forced runtime process to exit.")
         }
-    }
-
-    private fun closeBridge(instanceId: String) {
-        bridgeServers.remove(instanceId)?.stop()
     }
 
     private fun sendProcessGroupInterrupt(instanceId: String, pid: Int): Boolean {

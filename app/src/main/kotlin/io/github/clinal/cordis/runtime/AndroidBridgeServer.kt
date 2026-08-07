@@ -1,6 +1,5 @@
 package io.github.clinal.cordis.runtime
 
-import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.util.Log
 import android.content.Context
@@ -23,6 +22,7 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class AndroidBridgeServer(
     private val instanceId: String,
@@ -32,21 +32,19 @@ class AndroidBridgeServer(
     parentScope: CoroutineScope,
 ) {
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob())
-    private val socketName = "cordis-android-$instanceId"
     private val token = UUID.randomUUID().toString()
+    private val active = AtomicBoolean(true)
     private val writeMutex = Mutex()
     private val pendingResponses = ConcurrentHashMap<String, (JSONObject) -> Unit>()
-    private var serverSocket: LocalServerSocket? = null
     private var clientSocket: LocalSocket? = null
     private var writer: BufferedWriter? = null
-    private var acceptJob: Job? = null
     private var pollJob: Job? = null
     private var nextRequestId = 0L
     private val controlShell = AndroidControlShell(context.applicationContext)
 
     val environment: Map<String, String>
         get() = mapOf(
-            "CORDIS_ANDROID_SOCKET" to socketName,
+            "CORDIS_ANDROID_SOCKET" to AndroidBridgeListener.SOCKET_NAME,
             "CORDIS_ANDROID_SOCKET_NAMESPACE" to "abstract",
             "CORDIS_ANDROID_INSTANCE_ID" to instanceId,
             "CORDIS_ANDROID_PROTOCOL" to PROTOCOL,
@@ -54,32 +52,17 @@ class AndroidBridgeServer(
             "CORDIS_ANDROID_CONTROL_ENABLED" to controlEnabled.toString(),
         )
 
-    fun start() {
-        stop()
+    fun awaitClient() {
         instanceRepository.updateBridgeStatus(instanceId, AndroidBridgeStatus.WaitingForPlugin)
-        acceptJob = scope.launch {
-            try {
-                serverSocket = LocalServerSocket(socketName)
-                while (true) {
-                    val socket = serverSocket?.accept() ?: break
-                    attachClient(socket)
-                }
-            } catch (error: Exception) {
-                Log.e(TAG, "Bridge server failed for instance: $instanceId", error)
-                instanceRepository.updateBridgeStatus(instanceId, AndroidBridgeStatus.Stopped)
-            }
-        }
     }
 
+    @Synchronized
     fun stop() {
+        active.set(false)
         pollJob?.cancel()
         pollJob = null
-        acceptJob?.cancel()
-        acceptJob = null
         runCatching { clientSocket?.close() }
-        runCatching { serverSocket?.close() }
         clientSocket = null
-        serverSocket = null
         writer = null
         pendingResponses.clear()
         instanceRepository.updateBridgeStatus(instanceId, AndroidBridgeStatus.Stopped)
@@ -108,16 +91,17 @@ class AndroidBridgeServer(
         }
     }
 
-    private fun attachClient(socket: LocalSocket) {
+    @Synchronized
+    fun attachClient(socket: LocalSocket, reader: BufferedReader, hello: JSONObject): Boolean {
+        if (!accepts(hello)) return false
         runCatching { clientSocket?.close() }
         clientSocket = socket
         writer = socket.outputStream.bufferedWriter()
         pollJob?.cancel()
+        handleRequest(hello)
         scope.launch {
             try {
-                socket.inputStream.bufferedReader().use { reader ->
-                    readMessages(reader)
-                }
+                reader.use(::readMessages)
             } catch (error: IOException) {
                 Log.d(TAG, "Android bridge client socket closed for instance: $instanceId")
             }
@@ -131,6 +115,16 @@ class AndroidBridgeServer(
                 instanceRepository.updateBridgeStatus(instanceId, AndroidBridgeStatus.WaitingForPlugin)
             }
         }
+        return true
+    }
+
+    private fun accepts(hello: JSONObject): Boolean {
+        val params = hello.optJSONObject("params") ?: return false
+        return active.get() &&
+            hello.optString("method") == "hello" &&
+            params.optString("protocol") == PROTOCOL &&
+            params.optString("token") == token &&
+            params.optString("instanceId") == instanceId
     }
 
     private fun readMessages(reader: BufferedReader) {
@@ -154,7 +148,7 @@ class AndroidBridgeServer(
         val params = message.optJSONObject("params") ?: JSONObject()
         when (message.optString("method")) {
             "hello" -> {
-                val accepted = params.optString("protocol") == PROTOCOL && params.optString("token") == token
+                val accepted = accepts(message)
                 if (accepted) {
                     instanceRepository.updateBridgeStatus(instanceId, AndroidBridgeStatus.Connected)
                     startButtonPolling()
