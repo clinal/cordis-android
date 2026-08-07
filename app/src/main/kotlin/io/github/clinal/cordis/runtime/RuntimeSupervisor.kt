@@ -25,7 +25,7 @@ class RuntimeSupervisor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processes = ConcurrentHashMap<String, Process>()
     private val prootPids = ConcurrentHashMap<String, Int>()
-    private val startGate = RuntimeStartGate()
+    private val activeStarts = ConcurrentHashMap.newKeySet<String>()
     private val stoppingInstances = ConcurrentHashMap.newKeySet<String>()
     private val deletingInstances = ConcurrentHashMap.newKeySet<String>()
     private val startJobs = ConcurrentHashMap<String, Job>()
@@ -37,23 +37,16 @@ class RuntimeSupervisor(
 
     fun start(instanceId: String) {
         if (deletingInstances.contains(instanceId)) return
-        if (!startGate.request(instanceId)) return
-        launchStart(instanceId)
-    }
-
-    private fun launchStart(instanceId: String) {
-        if (deletingInstances.contains(instanceId)) {
-            startGate.release(instanceId)
-            return
-        }
+        closeBridge(instanceId)
+        if (!activeStarts.add(instanceId)) return
         instanceRepository.setAutoStart(instanceId, true)
 
         val job = scope.launch(start = CoroutineStart.LAZY) {
+            var outcome: RuntimeOutcome? = null
             try {
                 val instance = instanceRepository.instance(instanceId)
                 if (instance == null) {
-                    instanceRepository.setAutoStart(instanceId, false)
-                    instanceRepository.updateStatus(instanceId, RuntimeStatus.Failed, "Instance configuration was not found.")
+                    outcome = RuntimeOutcome(RuntimeStatus.Failed, "Instance configuration was not found.")
                     return@launch
                 }
 
@@ -65,9 +58,7 @@ class RuntimeSupervisor(
                     return@launch
                 }
                 if (!installer.isBootstrapInstalled()) {
-                    instanceRepository.setAutoStart(instanceId, false)
-                    instanceRepository.updateStatus(
-                        instanceId,
+                    outcome = RuntimeOutcome(
                         RuntimeStatus.Failed,
                         "Runtime bootstrap is not installed yet.",
                     )
@@ -126,29 +117,28 @@ class RuntimeSupervisor(
                 val exitCode = process.waitFor()
                 val stoppedByRequest = stoppingInstances.remove(instanceId)
                 val status = if (stoppedByRequest || exitCode == 0) RuntimeStatus.Stopped else RuntimeStatus.Failed
-                instanceRepository.setAutoStart(instanceId, false)
                 val logLine = if (stoppedByRequest) {
                     "Runtime stopped."
                 } else {
                     "Runtime exited with code $exitCode."
                 }
-                instanceRepository.updateStatus(instanceId, status, logLine)
+                outcome = RuntimeOutcome(status, logLine)
             } catch (error: Exception) {
                 Log.e(TAG, "Failed to start runtime for instance: $instanceId", error)
-                instanceRepository.setAutoStart(instanceId, false)
-                instanceRepository.updateStatus(
-                    instanceId,
+                outcome = RuntimeOutcome(
                     RuntimeStatus.Failed,
                     "Runtime start failed: ${error.message ?: error.javaClass.simpleName}.",
                 )
             } finally {
+                closeBridge(instanceId)
                 processes.remove(instanceId)
                 prootPids.remove(instanceId)
-                bridgeServers.remove(instanceId)?.stop()
                 stoppingInstances.remove(instanceId)
+                activeStarts.remove(instanceId)
                 startJobs.remove(instanceId)
-                if (startGate.finish(instanceId)) {
-                    launchStart(instanceId)
+                outcome?.let { terminal ->
+                    instanceRepository.setAutoStart(instanceId, false)
+                    instanceRepository.updateStatus(instanceId, terminal.status, terminal.logLine)
                 }
             }
         }
@@ -158,7 +148,7 @@ class RuntimeSupervisor(
     }
 
     fun stop(instanceId: String) {
-        startGate.cancelPending(instanceId)
+        closeBridge(instanceId)
         instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             stopProcess(instanceId)
@@ -172,7 +162,7 @@ class RuntimeSupervisor(
 
     fun remove(instanceId: String) {
         if (!deletingInstances.add(instanceId)) return
-        startGate.cancelPending(instanceId)
+        closeBridge(instanceId)
         instanceRepository.setAutoStart(instanceId, false)
         scope.launch {
             try {
@@ -210,6 +200,10 @@ class RuntimeSupervisor(
             process.destroyForcibly()
             instanceRepository.appendLog(instanceId, "Forced runtime process to exit.")
         }
+    }
+
+    private fun closeBridge(instanceId: String) {
+        bridgeServers.remove(instanceId)?.stop()
     }
 
     private fun sendProcessGroupInterrupt(instanceId: String, pid: Int): Boolean {
@@ -257,4 +251,9 @@ class RuntimeSupervisor(
         private val PROOT_PID_REGEX = Regex("^__PID__: (\\d+)$")
         private val PROCESS_STATUS_REGEX = Regex("^__STATUS__: (-?\\d+)$")
     }
+
+    private data class RuntimeOutcome(
+        val status: RuntimeStatus,
+        val logLine: String,
+    )
 }
