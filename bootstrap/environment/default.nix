@@ -2,7 +2,7 @@
 
 let
   runtime-pkgs = import inputs.nixpkgs { system = runtimeSystem; };
-  login = callPackage ./login.nix { };
+  login = callPackage ./login.nix { inherit (runtime-pkgs) gperftools; };
   env = callPackage ./env.nix { inherit (runtime-pkgs) busybox; };
   certs = callPackage ./certs.nix { };
   fonts = callPackage ./fonts.nix { };
@@ -21,6 +21,7 @@ buildEnv {
     curl
     git
     gh
+    gperftools
     zip
     unzip
     pnpm

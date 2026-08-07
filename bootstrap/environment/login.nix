@@ -1,4 +1,4 @@
-{ writeScriptBin }:
+{ gperftools, writeScriptBin }:
 
 writeScriptBin "login" ''
   set -e
@@ -17,6 +17,8 @@ writeScriptBin "login" ''
 
   export PATH=/bin
   export HOME=/home
+  # Work around proot allocator corruption on Android 15: https://github.com/termux/proot/issues/313
+  export LD_PRELOAD=${gperftools}/lib/libtcmalloc_minimal.so
 
   cd "$HOME"
   exec sh "$@"
