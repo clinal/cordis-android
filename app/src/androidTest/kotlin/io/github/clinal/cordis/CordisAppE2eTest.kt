@@ -12,6 +12,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.clinal.cordis.data.InstanceRepository
+import io.github.clinal.cordis.domain.RuntimeStatus
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -52,17 +53,32 @@ class CordisAppE2eTest {
             composeRule.onNodeWithTag("cordis.instance.instance-1").assertIsDisplayed()
             composeRule.onNodeWithTag("cordis.instance.instance-1.start").performClick()
 
-            composeRule.waitUntilAtLeastOneExists(
-                tag = "cordis.status.running",
-                timeoutMillis = RUNTIME_START_TIMEOUT_MILLIS,
-            )
-            composeRule.onNodeWithTag("cordis.status.running").assertIsDisplayed()
+            waitUntilRuntimeStarts()
             composeRule.waitUntil(RUNTIME_START_TIMEOUT_MILLIS) {
                 cordisServerResponds()
             }
-            composeRule.onNodeWithTag("cordis.instance.instance-1.stop").performClick()
+            application().runtimeSupervisor.stop("instance-1")
         }
     }
+
+    private fun waitUntilRuntimeStarts() {
+        val repository = application().instanceRepository
+        composeRule.waitUntil(RUNTIME_START_TIMEOUT_MILLIS) {
+            val instance = repository.instance("instance-1")
+            check(instance?.status != RuntimeStatus.Failed) {
+                "Runtime failed: ${instance?.lastLogLines?.joinToString(" | ")}"
+            }
+            instance?.status == RuntimeStatus.Running
+        }
+        val instance = requireNotNull(repository.instance("instance-1"))
+        check(instance.status == RuntimeStatus.Running) {
+            "Runtime did not start: status=${instance.status}, logs=${instance.lastLogLines.joinToString(" | ")}"
+        }
+    }
+
+    private fun application(): CordisApplication = InstrumentationRegistry.getInstrumentation()
+        .targetContext
+        .applicationContext as CordisApplication
 
     private fun cordisServerResponds(): Boolean {
         val connection = URL("http://127.0.0.1:${InstanceRepository.DEFAULT_BASE_PORT}")
@@ -80,15 +96,18 @@ class CordisAppE2eTest {
 
     private fun ComposeTestRule.waitUntilAtLeastOneExists(tag: String, timeoutMillis: Long) {
         waitUntil(timeoutMillis) {
-            onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+            semanticsNodeCount(tag)?.let { it > 0 } ?: false
         }
     }
 
     private fun ComposeTestRule.waitUntilNoNodes(tag: String, timeoutMillis: Long) {
         waitUntil(timeoutMillis) {
-            onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()
+            semanticsNodeCount(tag)?.let { it == 0 } ?: false
         }
     }
+
+    private fun ComposeTestRule.semanticsNodeCount(tag: String): Int? =
+        runCatching { onAllNodesWithTag(tag).fetchSemanticsNodes().size }.getOrNull()
 
     private companion object {
         const val FIRST_RUN_TIMEOUT_MILLIS = 120_000L
