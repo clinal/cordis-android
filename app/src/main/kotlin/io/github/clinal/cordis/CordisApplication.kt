@@ -3,6 +3,7 @@ package io.github.clinal.cordis
 import android.app.Application
 import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.runtime.RuntimeInstaller
+import io.github.clinal.cordis.runtime.RuntimeService
 import io.github.clinal.cordis.runtime.RuntimeSupervisor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,9 @@ class CordisApplication : Application() {
             }
             mutableBootstrapInstallState.value = BootstrapInstallState()
             if (bootstrapReady) {
-                runtimeSupervisor.restoreAutoStartedInstances()
+                instanceRepository.autoStartInstanceIds().forEach { instanceId ->
+                    RuntimeService.start(this@CordisApplication, instanceId)
+                }
             }
         }
     }

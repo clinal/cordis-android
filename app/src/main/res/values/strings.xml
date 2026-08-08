@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Cordis</string>
+    <string name="runtime_notification_channel">Cordis runtime</string>
+    <string name="runtime_notification_title">Cordis is running</string>
+    <string name="runtime_notification_text">Runtime instances are active in the background.</string>
 </resources>

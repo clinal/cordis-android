@@ -1,6 +1,8 @@
 package io.github.clinal.cordis.runtime
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.os.PowerManager
 import android.os.Process.SIGNAL_KILL
 import android.os.Process.sendSignal
 import android.util.Log
@@ -11,6 +13,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -30,15 +35,18 @@ class RuntimeSupervisor(
     private val deletingInstances = ConcurrentHashMap.newKeySet<String>()
     private val startJobs = ConcurrentHashMap<String, Job>()
     private val bridgeListener = AndroidBridgeListener(appContext, instanceRepository, scope)
+    private val mutableActiveRuntimeCount = MutableStateFlow(0)
+    private val wakeLock = appContext.getSystemService(PowerManager::class.java)
+        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Cordis:Runtime")
+        .apply { setReferenceCounted(false) }
 
-    fun restoreAutoStartedInstances() {
-        instanceRepository.autoStartInstanceIds().forEach(::start)
-    }
+    val activeRuntimeCount: StateFlow<Int> = mutableActiveRuntimeCount.asStateFlow()
 
     fun start(instanceId: String) {
         if (deletingInstances.contains(instanceId)) return
         if (!activeStarts.add(instanceId)) return
         bridgeListener.unregister(instanceId)
+        updateActiveRuntimeCount()
         instanceRepository.setAutoStart(instanceId, true)
 
         val job = scope.launch(start = CoroutineStart.LAZY) {
@@ -128,6 +136,7 @@ class RuntimeSupervisor(
                 prootPids.remove(instanceId)
                 stoppingInstances.remove(instanceId)
                 activeStarts.remove(instanceId)
+                updateActiveRuntimeCount()
                 startJobs.remove(instanceId)
                 outcome?.let { terminal ->
                     instanceRepository.setAutoStart(instanceId, false)
@@ -194,6 +203,17 @@ class RuntimeSupervisor(
         }
     }
 
+    @SuppressLint("WakelockTimeout")
+    @Synchronized
+    private fun updateActiveRuntimeCount() {
+        val count = activeStarts.size
+        mutableActiveRuntimeCount.value = count
+        if (count > 0 && !wakeLock.isHeld) {
+            wakeLock.acquire()
+        } else if (count == 0 && wakeLock.isHeld) {
+            wakeLock.release()
+        }
+    }
     private fun sendProcessGroupInterrupt(instanceId: String, pid: Int): Boolean {
         return try {
             val command = """

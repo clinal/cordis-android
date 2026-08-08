@@ -59,10 +59,7 @@ class CordisViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun start(instanceId: String = InstanceRepository.DEFAULT_INSTANCE_ID) {
-        val intent = Intent(app, RuntimeService::class.java)
-            .setAction(RuntimeService.ACTION_START)
-            .putExtra(RuntimeService.EXTRA_INSTANCE_ID, instanceId)
-        app.startService(intent)
+        RuntimeService.start(app, instanceId)
     }
 
     fun stop(instanceId: String = InstanceRepository.DEFAULT_INSTANCE_ID) {
