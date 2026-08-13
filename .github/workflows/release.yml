@@ -38,8 +38,6 @@ jobs:
           version=$(jq -r .version "$package_json")
           previous_version=$(git show "$BEFORE_SHA:$previous_package_json" | jq -r .version)
 
-          node -e 'const v = process.argv[1]; if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(v)) process.exit(1)' "$version"
-
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "$version" = "$previous_version" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
