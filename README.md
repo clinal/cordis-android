@@ -1,56 +1,81 @@
-# cordis-android
+# Cordis for Android
 
-Android host application for running Cordis inside a proot-managed Nix runtime.
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## Direction
+Run [Cordis](https://github.com/cordiverse/cordis) projects locally on Android. The native Kotlin app manages Cordis instances while Node.js runs inside an app-private, proot-based Nix environment.
 
-- Native Android app built with Kotlin and Jetpack Compose.
-- Cordis runs as a Node.js process inside proot, supervised by an Android service.
-- Runtime assets are produced by Nix and unpacked into app-private storage.
-  Default instances can be seeded from the Cordis boilerplate release, matching
-  the Koishi Android approach of shipping a prepared runtime template.
-- Keep `targetSdkVersion 28` initially so the app can execute the unpacked proot,
-  Node.js, and runtime scripts from private storage.
+## Features
 
-## Initial Milestones
+- Create and manage multiple Cordis instances.
+- Start and stop each runtime from a Jetpack Compose interface.
+- Open a global shell or an instance-specific terminal.
+- View a Cordis web console inside the app.
+- Configure ports, DNS, startup commands, and optional Android control integration.
+- Expose plugin actions through the Android bridge and pin them as home shortcuts.
+- Install the bundled Cordis boilerplate or import a custom ZIP package.
 
-1. Create the Android Compose project skeleton. Done: app module, Compose
-   console, runtime service, and default instance model are present.
-2. Port the proot installer and process supervisor from Koishi Android. Started:
-   directory preparation, Cordis boilerplate seeding, and command construction
-   are scaffolded; bootstrap extraction and real process packaging are next.
-3. Build a minimal Nix bootstrap containing proot-static, busybox, Node.js,
-   certificates, and required shell shims. Done: the bootstrap flake follows
-   Koishi Android's pinned nix-on-droid/proot packaging path and emits
-   `bootstrap.zip` plus `env.txt`.
-4. Package a default Cordis instance template from
-   `cordiverse/boilerplate@v0.6.1`:
-   `boilerplate-v0.6.1-linux-arm64-node24.zip`
-   (`sha256:4de3af9160043f14cc2fa5ccb5ffdbbfdd287b505a6300dcc44602730381c572`).
-5. Add Compose screens for instances, runtime logs, settings, and import/export.
-6. Validate on Android 10, 11, 14, and 15 devices or emulators.
+## Requirements
 
-## References
+- Android 9 (API 28) or newer.
+- An `arm64-v8a` device for the default bootstrap and boilerplate assets.
+- [Nix](https://nixos.org/) with flakes enabled for reproducible local builds.
 
-- https://github.com/koishijs/koishi-android
-- https://github.com/cordiverse/cordis
-- https://github.com/cordiverse/boilerplate/releases/tag/v0.6.1
+The app intentionally targets Android API 28 so the unpacked proot runtime, Node.js, and scripts can execute from app-private storage.
 
-## Bootstrap Assets
+## Build
 
-Build the bootstrap package with:
+Build the ARM64 runtime assets first:
 
-```bash
+```shell
 nix build ./bootstrap
 ```
 
-Then package those generated assets into the Android app with:
+Then build an APK in the provided development environment:
 
-```bash
+```shell
 nix develop --command gradle \
-  -PcordisBootstrapAssetsDir="$(readlink -f result)" \
+  -PcordisBootstrapAssetsDir=result \
   assembleDebug
 ```
 
-Without `cordisBootstrapAssetsDir`, the app skips bundled runtime assets so
-development builds stay small.
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+
+The `cordisBootstrapAssetsDir` property is optional. Omitting it produces a smaller developer build without a bundled proot runtime; that build cannot start Cordis unless compatible runtime files are already installed in the app data directory.
+
+## Test
+
+Run JVM unit tests:
+
+```shell
+nix develop --command gradle testDebugUnitTest
+```
+
+Run the Compose end-to-end tests in the Nix-managed x86_64 emulator:
+
+```shell
+nix build ./bootstrap#x86_64 -o result
+nix run .#emulated-connected-android-test -- \
+  -PcordisBootstrapAssetsDir=result
+```
+
+The emulator test requires Linux with KVM access.
+
+## Runtime packaging
+
+`bootstrap/` builds the minimal Linux userspace shipped with the app, including proot, BusyBox, Node.js, CA certificates, and shell shims. Its output exposes Android assets under `result/assets`:
+
+- `bootstrap/bootstrap.zip` — the root filesystem.
+- `bootstrap/env.txt` — runtime environment metadata used for install and upgrade detection.
+- `bootstrap/boilerplate.zip` — the default Cordis project template (currently boilerplate v0.6.1 with Node.js 24).
+
+At first launch, the app extracts these assets into private storage. Instances live in separate home directories and are supervised by an Android service.
+
+## Project layout
+
+| Path | Purpose |
+| --- | --- |
+| `app/` | Android application, Compose UI, runtime supervisor, bridge, and terminal |
+| `bootstrap/` | Nix definitions for the proot runtime assets |
+| `boilerplate/` | Cordis workspace and `cordis-plugin-android` source |
+| `flake.nix` | Android development shell and emulator test runner |
+| `.github/workflows/` | APK build, end-to-end test, and release automation |
