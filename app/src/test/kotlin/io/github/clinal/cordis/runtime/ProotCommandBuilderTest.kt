@@ -12,7 +12,8 @@ class ProotCommandBuilderTest {
         val command = loginShellArguments(linkedMapOf("TOKEN" to "value with spaces"))
 
         assertTrue(command.contains("/usr/bin/env"))
-        assertTrue(command.contains("TOKEN=value with spaces"))
+        assertTrue(command.contains("CORDIS_INSTANCE_ENV_TOKEN=value with spaces"))
+        assertFalse(command.contains("TOKEN=value with spaces"))
         assertEquals(listOf("/bin/login", "-i"), command.takeLast(2))
     }
 

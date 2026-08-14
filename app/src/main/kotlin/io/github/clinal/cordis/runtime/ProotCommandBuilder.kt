@@ -85,9 +85,12 @@ internal fun packageExtractionArguments(format: PackageArchiveFormat): List<Stri
 }
 
 internal fun loginShellArguments(environment: Map<String, String>): List<String> {
-    return listOf("/usr/bin/env") + environment.map { (key, value) -> "$key=$value" } +
-        listOf("/bin/login", "-i")
+    return listOf("/usr/bin/env") + environment.map { (key, value) ->
+        "$INSTANCE_ENVIRONMENT_PREFIX$key=$value"
+    } + listOf("/bin/login", "-i")
 }
+
+private const val INSTANCE_ENVIRONMENT_PREFIX = "CORDIS_INSTANCE_ENV_"
 
 internal fun cordisProcessCommand(
     startCommand: String,
