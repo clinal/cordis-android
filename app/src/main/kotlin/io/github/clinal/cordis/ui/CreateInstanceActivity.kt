@@ -75,7 +75,16 @@ class CreateInstanceActivity : ComponentActivity() {
                     errorMessage = errorMessage,
                     suggestedPort = repository.suggestedPort(),
                     onBack = ::finish,
-                    onSelectPackage = { packagePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                    onSelectPackage = {
+                        packagePicker.launch(
+                            arrayOf(
+                                "application/zip",
+                                "application/gzip",
+                                "application/x-gzip",
+                                "application/octet-stream",
+                            ),
+                        )
+                    },
                     onCreate = ::createInstance,
                 )
             }
@@ -93,7 +102,7 @@ class CreateInstanceActivity : ComponentActivity() {
     ) {
         val selectedPackage = packageUri
         if (useCustomPackage && selectedPackage == null) {
-            errorMessage = "Select a ZIP package first."
+            errorMessage = "Select a ZIP or tar.gz package first."
             return
         }
 

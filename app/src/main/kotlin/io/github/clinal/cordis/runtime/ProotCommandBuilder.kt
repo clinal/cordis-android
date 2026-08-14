@@ -31,16 +31,15 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         )
     }
 
-    fun packageExtractionCommand(target: File, archive: File): List<String> {
+    internal fun packageExtractionCommand(
+        target: File,
+        archive: File,
+        format: PackageArchiveFormat,
+    ): List<String> {
         return prootCommandPrefix(target) + listOf(
             "-b",
             "${archive.absolutePath}:$PACKAGE_ARCHIVE_PATH",
-            "/bin/unzip",
-            "-q",
-            PACKAGE_ARCHIVE_PATH,
-            "-d",
-            "/home",
-        )
+        ) + packageExtractionArguments(format)
     }
 
     private fun prootCommandPrefix(instanceId: String): List<String> {
@@ -74,9 +73,16 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         )
     }
 
-    private companion object {
-        const val PACKAGE_ARCHIVE_PATH = "/tmp/cordis-package.zip"
+    companion object {
+        const val PACKAGE_ARCHIVE_PATH = "/tmp/cordis-package"
     }
+}
+
+internal fun packageExtractionArguments(format: PackageArchiveFormat): List<String> = when (format) {
+    PackageArchiveFormat.Zip ->
+        listOf("/bin/unzip", "-q", ProotCommandBuilder.PACKAGE_ARCHIVE_PATH, "-d", "/home")
+    PackageArchiveFormat.TarGzip ->
+        listOf("/bin/tar", "-xzf", ProotCommandBuilder.PACKAGE_ARCHIVE_PATH, "-C", "/home")
 }
 
 internal fun cordisProcessCommand(
