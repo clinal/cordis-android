@@ -74,6 +74,39 @@ class RuntimeInstaller(context: Context) {
         }
     }
 
+    fun installDownloadedPackage(
+        instanceId: String,
+        packageFile: File,
+        onProgress: (String) -> Unit = {},
+    ) {
+        installPackage(instanceId, packageFile, onProgress)
+    }
+
+    private fun installPackage(instanceId: String, packageFile: File, onProgress: (String) -> Unit) {
+        prepareBootstrap(onProgress)
+        check(isBootstrapInstalled()) { "Runtime bootstrap is not installed." }
+        check(packageFile.isFile) { "Downloaded package is missing." }
+        val instanceHome = paths.instanceHome(instanceId)
+        val staging = requireNotNull(instanceHome.parentFile).resolve(".${instanceHome.name}-staging")
+        staging.deleteRecursively()
+        check(staging.mkdirs()) { "Cannot create package staging directory." }
+        try {
+            onProgress("Extracting downloaded package.")
+            val processBuilder = ProcessBuilder(ProotCommandBuilder(paths).packageExtractionCommand(staging, packageFile))
+            processBuilder.environment()["PROOT_TMP_DIR"] = paths.tmp.absolutePath
+            val process = processBuilder.redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            val exitCode = process.waitFor()
+            if (exitCode != 0) error("Cannot extract the package (exit $exitCode): ${output.trim()}")
+            staging.resolve(TEMPLATE_MARKER).writeText("registry\n")
+            if (instanceHome.exists() && !instanceHome.deleteRecursively()) error("Cannot replace the instance directory.")
+            check(staging.renameTo(instanceHome)) { "Cannot install the downloaded package." }
+        } catch (error: Throwable) {
+            staging.deleteRecursively()
+            throw error
+        }
+    }
+
     fun prepareBootstrap(onProgress: (String) -> Unit = {}) {
         synchronized(bootstrapInstallLock) {
             installBootstrap(onProgress)

@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.github.clinal.cordis.CordisApplication
 import io.github.clinal.cordis.data.InstanceRepository
+import io.github.clinal.cordis.data.BundleRegistry
+import io.github.clinal.cordis.data.RegistryBundle
 import io.github.clinal.cordis.runtime.RuntimeInstaller
 import io.github.clinal.cordis.ui.theme.CordisTheme
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +55,7 @@ class CreateInstanceActivity : ComponentActivity() {
     private var creating by mutableStateOf(false)
     private var progress by mutableStateOf("")
     private var errorMessage by mutableStateOf<String?>(null)
+    private var downloadedBundles by mutableStateOf<List<RegistryBundle>>(emptyList())
 
     private val packagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
@@ -66,6 +69,14 @@ class CreateInstanceActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val repository = (application as CordisApplication).instanceRepository
+        lifecycleScope.launch {
+            downloadedBundles = withContext(Dispatchers.IO) {
+                runCatching {
+                    val registry = BundleRegistry(this@CreateInstanceActivity)
+                    registry.fetch().filter { registry.archive(it).isFile }
+                }.getOrDefault(emptyList())
+            }
+        }
         setContent {
             CordisTheme {
                 CreateInstanceScreen(
@@ -73,6 +84,7 @@ class CreateInstanceActivity : ComponentActivity() {
                     creating = creating,
                     progress = progress,
                     errorMessage = errorMessage,
+                    downloadedBundles = downloadedBundles,
                     suggestedPort = repository.suggestedPort(),
                     onBack = ::finish,
                     onSelectPackage = { packagePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
@@ -85,6 +97,7 @@ class CreateInstanceActivity : ComponentActivity() {
     private fun createInstance(
         name: String,
         useCustomPackage: Boolean,
+        registryBundle: RegistryBundle?,
         port: Int,
         androidControlEnabled: Boolean,
         hasWebService: Boolean,
@@ -92,7 +105,7 @@ class CreateInstanceActivity : ComponentActivity() {
         startCommand: String,
     ) {
         val selectedPackage = packageUri
-        if (useCustomPackage && selectedPackage == null) {
+        if (useCustomPackage && registryBundle == null && selectedPackage == null) {
             errorMessage = "Select a ZIP package first."
             return
         }
@@ -100,6 +113,7 @@ class CreateInstanceActivity : ComponentActivity() {
         val config = PendingCreate(
             name,
             useCustomPackage,
+            registryBundle,
             port,
             androidControlEnabled,
             hasWebService,
@@ -126,7 +140,14 @@ class CreateInstanceActivity : ComponentActivity() {
                         startCommand = config.startCommand,
                     )
                     try {
-                        if (selectedPackage != null && config.useCustomPackage) {
+                        if (config.registryBundle != null) {
+                            val registry = BundleRegistry(app)
+                            RuntimeInstaller(app).installDownloadedPackage(
+                                instanceId = instance.id,
+                                packageFile = registry.archive(config.registryBundle),
+                                onProgress = { message -> runOnUiThread { progress = message } },
+                            )
+                        } else if (selectedPackage != null && config.useCustomPackage) {
                             RuntimeInstaller(app).installCustomPackage(
                                 instanceId = instance.id,
                                 packageUri = selectedPackage,
@@ -156,12 +177,14 @@ private fun CreateInstanceScreen(
     creating: Boolean,
     progress: String,
     errorMessage: String?,
+    downloadedBundles: List<RegistryBundle>,
     suggestedPort: Int,
     onBack: () -> Unit,
     onSelectPackage: () -> Unit,
     onCreate: (
         name: String,
         useCustomPackage: Boolean,
+        registryBundle: RegistryBundle?,
         port: Int,
         androidControlEnabled: Boolean,
         hasWebService: Boolean,
@@ -171,6 +194,7 @@ private fun CreateInstanceScreen(
 ) {
     var name by androidx.compose.runtime.remember { mutableStateOf("") }
     var useCustomPackage by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var registryBundle by androidx.compose.runtime.remember { mutableStateOf<RegistryBundle?>(null) }
     var portText by androidx.compose.runtime.remember(suggestedPort) { mutableStateOf(suggestedPort.toString()) }
     var androidControlEnabled by androidx.compose.runtime.remember { mutableStateOf(false) }
     var hasWebService by androidx.compose.runtime.remember { mutableStateOf(true) }
@@ -214,24 +238,34 @@ private fun CreateInstanceScreen(
             )
 
             PackageOption(
-                selected = !useCustomPackage,
+                selected = !useCustomPackage && registryBundle == null,
                 title = "Built-in template",
                 description = "Create the instance from the bundled Cordis boilerplate.",
                 enabled = !creating,
-                onClick = { useCustomPackage = false },
+                onClick = { useCustomPackage = false; registryBundle = null },
             )
             PackageOption(
                 selected = useCustomPackage,
                 title = "Custom ZIP package",
                 description = "Extract your package directly into the new instance directory.",
                 enabled = !creating,
-                onClick = { useCustomPackage = true },
+                onClick = { useCustomPackage = true; registryBundle = null },
             )
 
             if (useCustomPackage) {
                 OutlinedButton(onClick = onSelectPackage, enabled = !creating) {
                     Text(packageName ?: "Select ZIP package", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+
+            downloadedBundles.forEach { bundle ->
+                PackageOption(
+                    selected = registryBundle?.id == bundle.id,
+                    title = "${bundle.name} ${bundle.version}",
+                    description = "Downloaded registry bundle.",
+                    enabled = !creating,
+                    onClick = { useCustomPackage = false; registryBundle = bundle },
+                )
             }
 
             BooleanOption(
@@ -296,6 +330,7 @@ private fun CreateInstanceScreen(
                     onCreate(
                         name,
                         useCustomPackage,
+                        registryBundle,
                         port ?: suggestedPort,
                         androidControlEnabled,
                         hasWebService,
@@ -314,6 +349,7 @@ private fun CreateInstanceScreen(
 private data class PendingCreate(
     val name: String,
     val useCustomPackage: Boolean,
+    val registryBundle: RegistryBundle?,
     val port: Int,
     val androidControlEnabled: Boolean,
     val hasWebService: Boolean,
