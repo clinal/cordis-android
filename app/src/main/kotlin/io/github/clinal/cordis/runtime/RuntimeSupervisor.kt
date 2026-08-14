@@ -84,7 +84,7 @@ class RuntimeSupervisor(
                 val command = commandBuilder.cordisCommand(
                     instanceId = instanceId,
                     startCommand = instance.startCommand,
-                    environment = bridgeServer.environment,
+                    environment = instance.environment + bridgeServer.environment,
                 )
                 val process = ProcessBuilder(command)
                     .redirectErrorStream(true)

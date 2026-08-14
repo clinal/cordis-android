@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,10 +30,28 @@ import io.github.clinal.cordis.ui.theme.CordisTheme
 
 class InstanceSettingsActivity : ComponentActivity() {
     private val viewModel by viewModels<CordisViewModel>()
+    private var instanceId = ""
+
+    private val environmentEditor = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        val instance = viewModel.instances.value.firstOrNull { it.id == instanceId }
+            ?: return@registerForActivityResult
+        viewModel.updateInstanceConfig(
+            instance.id,
+            instance.name,
+            instance.port,
+            instance.dns,
+            instance.androidControlEnabled,
+            instance.hasWebService,
+            instance.patchPort,
+            instance.startCommand,
+            EnvironmentVariablesActivity.environmentFrom(result.data),
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val instanceId = intent.getStringExtra(EXTRA_INSTANCE_ID).orEmpty()
+        instanceId = intent.getStringExtra(EXTRA_INSTANCE_ID).orEmpty()
         setContent {
             val instances by viewModel.instances.collectAsState()
             val instance = instances.firstOrNull { it.id == instanceId }
@@ -56,6 +75,11 @@ class InstanceSettingsActivity : ComponentActivity() {
                         if (instance != null) {
                             InstanceSettingsPanel(
                                 instance = instance,
+                                onEditEnvironment = {
+                                    environmentEditor.launch(
+                                        EnvironmentVariablesActivity.intent(this@InstanceSettingsActivity, instance.environment),
+                                    )
+                                },
                                 onSave = {
                                         name,
                                         port,

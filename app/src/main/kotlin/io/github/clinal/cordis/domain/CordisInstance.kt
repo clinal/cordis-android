@@ -9,6 +9,7 @@ data class CordisInstance(
     val hasWebService: Boolean,
     val patchPort: Boolean,
     val startCommand: String,
+    val environment: Map<String, String>,
     val status: RuntimeStatus,
     val bridgeStatus: AndroidBridgeStatus,
     val bridgeButtons: List<CordisButton>,

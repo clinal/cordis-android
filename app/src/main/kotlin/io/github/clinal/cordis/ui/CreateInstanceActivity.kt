@@ -59,6 +59,13 @@ class CreateInstanceActivity : ComponentActivity() {
     private var downloadedBundleIds by mutableStateOf<Set<String>>(emptySet())
     private var downloadingBundleId by mutableStateOf<String?>(null)
     private var downloadProgress by mutableStateOf<BundleDownloadProgress?>(null)
+    private var environment by mutableStateOf<Map<String, String>>(emptyMap())
+
+    private val environmentEditor = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            environment = EnvironmentVariablesActivity.environmentFrom(result.data)
+        }
+    }
 
     private val packagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
@@ -97,6 +104,7 @@ class CreateInstanceActivity : ComponentActivity() {
                     downloadingBundleId = downloadingBundleId,
                     downloadProgress = downloadProgress,
                     suggestedPort = repository.suggestedPort(),
+                    environmentCount = environment.size,
                     onBack = ::finish,
                     onSelectPackage = {
                         packagePicker.launch(
@@ -109,6 +117,9 @@ class CreateInstanceActivity : ComponentActivity() {
                         )
                     },
                     onDownloadBundle = ::downloadBundle,
+                    onEditEnvironment = {
+                        environmentEditor.launch(EnvironmentVariablesActivity.intent(this, environment))
+                    },
                     onCreate = ::createInstance,
                 )
             }
@@ -162,6 +173,7 @@ class CreateInstanceActivity : ComponentActivity() {
             hasWebService,
             patchPort,
             startCommand,
+            environment,
         )
         persist(config)
     }
@@ -181,6 +193,7 @@ class CreateInstanceActivity : ComponentActivity() {
                         hasWebService = config.hasWebService,
                         patchPort = config.patchPort,
                         startCommand = config.startCommand,
+                        environment = config.environment,
                     )
                     try {
                         if (config.registryBundle != null) {
@@ -225,9 +238,11 @@ private fun CreateInstanceScreen(
     downloadingBundleId: String?,
     downloadProgress: BundleDownloadProgress?,
     suggestedPort: Int,
+    environmentCount: Int,
     onBack: () -> Unit,
     onSelectPackage: () -> Unit,
     onDownloadBundle: (RegistryBundle) -> Unit,
+    onEditEnvironment: () -> Unit,
     onCreate: (
         name: String,
         useCustomPackage: Boolean,
@@ -283,6 +298,14 @@ private fun CreateInstanceScreen(
                 singleLine = true,
                 label = { Text("Name (optional)") },
             )
+
+            OutlinedButton(
+                onClick = onEditEnvironment,
+                enabled = !creating,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Environment variables ($environmentCount)")
+            }
 
             PackageOption(
                 selected = !useCustomPackage && registryBundle == null,
@@ -406,6 +429,7 @@ private data class PendingCreate(
     val hasWebService: Boolean,
     val patchPort: Boolean,
     val startCommand: String,
+    val environment: Map<String, String>,
 )
 
 private data class BundleDownloadProgress(val downloadedBytes: Long, val totalBytes: Long)

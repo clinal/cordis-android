@@ -45,4 +45,19 @@ class ProotCommandBuilderTest {
             packageExtractionArguments(PackageArchiveFormat.TarGzip),
         )
     }
+
+    @Test
+    fun cordisProcessCommandExportsConfiguredEnvironment() {
+        val command = cordisProcessCommand(
+            startCommand = "true",
+            environment = linkedMapOf(
+                "PLAIN" to "value",
+                "QUOTED" to "it's safe",
+            ),
+        )
+
+        assertTrue(command.contains("export PLAIN="))
+        assertTrue(command.contains("export QUOTED="))
+        assertEquals(0, ProcessBuilder("sh", "-n", "-c", command).start().waitFor())
+    }
 }

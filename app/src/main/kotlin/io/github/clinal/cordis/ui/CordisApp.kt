@@ -608,6 +608,7 @@ private val RuntimeStatus.canStart: Boolean
 @Composable
 fun InstanceSettingsPanel(
     instance: CordisInstance,
+    onEditEnvironment: () -> Unit,
     onSave: (
         name: String,
         port: Int,
@@ -652,6 +653,12 @@ fun InstanceSettingsPanel(
                 label = { Text("Instance name") },
                 singleLine = true,
             )
+            OutlinedButton(
+                onClick = onEditEnvironment,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Environment variables (${instance.environment.size})")
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
