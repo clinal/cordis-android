@@ -118,6 +118,7 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                         context.startActivity(Intent(context, CreateInstanceActivity::class.java))
                     },
                     onOpenTerminal = viewModel::openGlobalTerminal,
+                    onOpenSettings = { context.startActivity(Intent(context, BundleManagerActivity::class.java)) },
                 )
 
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -301,13 +302,13 @@ private fun Header(
     actionsEnabled: Boolean,
     onAddInstance: () -> Unit,
     onOpenTerminal: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column {
             Text(
                 modifier = Modifier.testTag("cordis.title"),
                 text = "Cordis",
@@ -324,7 +325,14 @@ private fun Header(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
+                Icon(Icons.Default.Settings, contentDescription = "Bundles")
+            }
             IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
                 Icon(Icons.Default.Terminal, contentDescription = "Global terminal")
             }
