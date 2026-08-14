@@ -118,6 +118,7 @@ fun CordisApp(viewModel: CordisViewModel = viewModel()) {
                         context.startActivity(Intent(context, CreateInstanceActivity::class.java))
                     },
                     onOpenTerminal = viewModel::openGlobalTerminal,
+                    onOpenSettings = { context.startActivity(Intent(context, BundleManagerActivity::class.java)) },
                 )
 
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -301,6 +302,7 @@ private fun Header(
     actionsEnabled: Boolean,
     onAddInstance: () -> Unit,
     onOpenTerminal: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -325,6 +327,9 @@ private fun Header(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
+                Icon(Icons.Default.Settings, contentDescription = "Bundle management")
+            }
             IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
                 Icon(Icons.Default.Terminal, contentDescription = "Global terminal")
             }
