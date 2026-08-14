@@ -304,12 +304,11 @@ private fun Header(
     onOpenTerminal: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column {
             Text(
                 modifier = Modifier.testTag("cordis.title"),
                 text = "Cordis",
@@ -326,9 +325,13 @@ private fun Header(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             IconButton(onClick = onOpenSettings, enabled = actionsEnabled) {
-                Icon(Icons.Default.Settings, contentDescription = "Bundle management")
+                Icon(Icons.Default.Settings, contentDescription = "Bundles")
             }
             IconButton(onClick = onOpenTerminal, enabled = actionsEnabled) {
                 Icon(Icons.Default.Terminal, contentDescription = "Global terminal")
