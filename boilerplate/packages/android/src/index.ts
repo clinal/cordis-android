@@ -76,6 +76,8 @@ export interface NotificationResult {
   id?: string
 }
 
+export type ToastDuration = 'short' | 'long'
+
 type JsonRpcId = string | number
 
 type CordisContext = BaseContext & {
@@ -230,6 +232,11 @@ export class AndroidBridge {
 
   notify(options: NotificationOptions): Promise<NotificationResult> {
     return this.request('notify', options).then(result => (result ?? {}) as NotificationResult)
+  }
+
+  toast(content: string, duration: ToastDuration = 'short'): Promise<void> {
+    if (!content.trim()) return Promise.reject(new Error('Android toast content must not be empty'))
+    return this.request('toast', { content, duration }).then(() => undefined)
   }
 
   async trigger(buttonId: string): Promise<void> {

@@ -24,6 +24,14 @@ button.patch({ enabled: false, disabledReason: 'Busy' })
 button.dispose()
 ```
 
+Show a native Android toast from a plugin with an optional `short` (default)
+or `long` duration:
+
+```ts
+await ctx.android.toast('Hello from Cordis')
+await ctx.android.toast('This stays visible longer', 'long')
+```
+
 Device control is disabled by default. Enable **Android control** in the
 instance settings, restart that instance, and grant cordis-android access in
 Shizuku before using it:
