@@ -33,7 +33,7 @@ class RuntimeInstaller(context: Context) {
         val instanceHome = paths.instanceHome(instanceId)
         val instancesHome = requireNotNull(instanceHome.parentFile) { "Instance directory has no parent." }
         val staging = instancesHome.resolve(".${instanceHome.name}-staging")
-        val archive = instancesHome.resolve(".${instanceHome.name}-package.zip")
+        val archive = instancesHome.resolve(".${instanceHome.name}-package")
         staging.deleteRecursively()
         archive.delete()
         check(staging.mkdirs()) { "Cannot create package staging directory." }
@@ -45,10 +45,11 @@ class RuntimeInstaller(context: Context) {
             input.use { stream ->
                 archive.outputStream().use { output -> stream.copyTo(output) }
             }
+            val archiveFormat = detectPackageArchiveFormat(archive)
 
             onProgress("Extracting custom package.")
             val processBuilder = ProcessBuilder(
-                ProotCommandBuilder(paths).packageExtractionCommand(staging, archive),
+                ProotCommandBuilder(paths).packageExtractionCommand(staging, archive, archiveFormat),
             )
             processBuilder.environment()["PROOT_TMP_DIR"] = paths.tmp.absolutePath
             val process = processBuilder
@@ -334,6 +335,21 @@ class RuntimeInstaller(context: Context) {
         private const val PROGRESS_INTERVAL = 500
         private const val SYMLINK_SEPARATOR = '←'
         private const val TEMPLATE_MARKER = ".cordis-android-template"
+    }
+}
+
+internal enum class PackageArchiveFormat { Zip, TarGzip }
+
+internal fun detectPackageArchiveFormat(archive: File): PackageArchiveFormat {
+    val signature = ByteArray(4)
+    val count = archive.inputStream().use { it.read(signature) }
+    return when {
+        count >= 2 && signature[0] == 0x1f.toByte() && signature[1] == 0x8b.toByte() ->
+            PackageArchiveFormat.TarGzip
+        count == 4 && signature[0] == 0x50.toByte() && signature[1] == 0x4b.toByte() &&
+            signature[2] in byteArrayOf(0x03, 0x05, 0x07) &&
+            signature[3] in byteArrayOf(0x04, 0x06, 0x08) -> PackageArchiveFormat.Zip
+        else -> error("Unsupported package format. Select a ZIP or tar.gz archive.")
     }
 }
 
