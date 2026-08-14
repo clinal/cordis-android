@@ -14,12 +14,11 @@ class ProotCommandBuilder(private val paths: RuntimePaths) {
         )
     }
 
-    fun loginShellCommand(instanceId: String): List<String> {
-        return prootCommandPrefix(instanceId) + listOf(
-            "/bin/sh",
-            "/bin/login",
-            "-i",
-        )
+    fun loginShellCommand(
+        instanceId: String,
+        environment: Map<String, String> = emptyMap(),
+    ): List<String> {
+        return prootCommandPrefix(instanceId) + loginShellArguments(environment)
     }
 
     fun shellCommand(instanceId: String, command: String): List<String> {
@@ -83,6 +82,11 @@ internal fun packageExtractionArguments(format: PackageArchiveFormat): List<Stri
         listOf("/bin/unzip", "-q", ProotCommandBuilder.PACKAGE_ARCHIVE_PATH, "-d", "/home")
     PackageArchiveFormat.TarGzip ->
         listOf("/bin/tar", "-xzf", ProotCommandBuilder.PACKAGE_ARCHIVE_PATH, "-C", "/home")
+}
+
+internal fun loginShellArguments(environment: Map<String, String>): List<String> {
+    return listOf("/usr/bin/env") + environment.map { (key, value) -> "$key=$value" } +
+        listOf("/bin/login", "-i")
 }
 
 internal fun cordisProcessCommand(

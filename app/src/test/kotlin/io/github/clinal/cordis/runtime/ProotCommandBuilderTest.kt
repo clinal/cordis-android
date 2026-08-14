@@ -8,6 +8,15 @@ import java.io.File
 
 class ProotCommandBuilderTest {
     @Test
+    fun loginShellCommandPassesInstanceEnvironmentThroughEnv() {
+        val command = loginShellArguments(linkedMapOf("TOKEN" to "value with spaces"))
+
+        assertTrue(command.contains("/usr/bin/env"))
+        assertTrue(command.contains("TOKEN=value with spaces"))
+        assertEquals(listOf("/bin/login", "-i"), command.takeLast(2))
+    }
+
+    @Test
     fun cordisProcessCommandUsesQuotedScriptArgumentInsteadOfHeredoc() {
         val command = cordisProcessCommand(
             startCommand = "printf '%s\\n' \"hello world\"",

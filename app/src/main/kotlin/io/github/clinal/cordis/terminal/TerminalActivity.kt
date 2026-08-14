@@ -112,7 +112,7 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
             "Runtime bootstrap assets are not packaged in this build."
         }
 
-        val command = ProotCommandBuilder(paths).loginShellCommand(instance.id)
+        val command = ProotCommandBuilder(paths).loginShellCommand(instance.id, instance.environment)
         return SessionSpec(
             shellPath = command.first(),
             cwd = paths.filesDir.absolutePath,
