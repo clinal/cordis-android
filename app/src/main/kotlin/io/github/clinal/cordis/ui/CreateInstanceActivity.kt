@@ -55,7 +55,10 @@ class CreateInstanceActivity : ComponentActivity() {
     private var creating by mutableStateOf(false)
     private var progress by mutableStateOf("")
     private var errorMessage by mutableStateOf<String?>(null)
-    private var downloadedBundles by mutableStateOf<List<RegistryBundle>>(emptyList())
+    private var registryBundles by mutableStateOf<List<RegistryBundle>>(emptyList())
+    private var downloadedBundleIds by mutableStateOf<Set<String>>(emptySet())
+    private var downloadingBundleId by mutableStateOf<String?>(null)
+    private var downloadProgress by mutableStateOf<BundleDownloadProgress?>(null)
 
     private val packagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
@@ -70,11 +73,16 @@ class CreateInstanceActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val repository = (application as CordisApplication).instanceRepository
         lifecycleScope.launch {
-            downloadedBundles = withContext(Dispatchers.IO) {
-                runCatching {
+            runCatching {
+                withContext(Dispatchers.IO) {
                     val registry = BundleRegistry(this@CreateInstanceActivity)
-                    registry.fetch().filter { registry.archive(it).isFile }
-                }.getOrDefault(emptyList())
+                    registry.fetch().let { it to registry.downloaded(it) }
+                }
+            }.onSuccess { (available, downloaded) ->
+                registryBundles = available
+                downloadedBundleIds = downloaded
+            }.onFailure { error ->
+                errorMessage = error.message ?: "Cannot load bundle registry."
             }
         }
         setContent {
@@ -84,7 +92,10 @@ class CreateInstanceActivity : ComponentActivity() {
                     creating = creating,
                     progress = progress,
                     errorMessage = errorMessage,
-                    downloadedBundles = downloadedBundles,
+                    registryBundles = registryBundles,
+                    downloadedBundleIds = downloadedBundleIds,
+                    downloadingBundleId = downloadingBundleId,
+                    downloadProgress = downloadProgress,
                     suggestedPort = repository.suggestedPort(),
                     onBack = ::finish,
                     onSelectPackage = {
@@ -97,9 +108,32 @@ class CreateInstanceActivity : ComponentActivity() {
                             ),
                         )
                     },
+                    onDownloadBundle = ::downloadBundle,
                     onCreate = ::createInstance,
                 )
             }
+        }
+    }
+
+    private fun downloadBundle(bundle: RegistryBundle) {
+        downloadingBundleId = bundle.id
+        downloadProgress = null
+        errorMessage = null
+        lifecycleScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val registry = BundleRegistry(this@CreateInstanceActivity)
+                    registry.download(bundle) { downloadedBytes, totalBytes ->
+                        runOnUiThread {
+                            downloadProgress = BundleDownloadProgress(downloadedBytes, totalBytes)
+                        }
+                    }
+                    registry.downloaded(registryBundles)
+                }
+            }.onSuccess { downloadedBundleIds = it }
+                .onFailure { error -> errorMessage = error.message ?: "Cannot download bundle." }
+            downloadingBundleId = null
+            downloadProgress = null
         }
     }
 
@@ -186,10 +220,14 @@ private fun CreateInstanceScreen(
     creating: Boolean,
     progress: String,
     errorMessage: String?,
-    downloadedBundles: List<RegistryBundle>,
+    registryBundles: List<RegistryBundle>,
+    downloadedBundleIds: Set<String>,
+    downloadingBundleId: String?,
+    downloadProgress: BundleDownloadProgress?,
     suggestedPort: Int,
     onBack: () -> Unit,
     onSelectPackage: () -> Unit,
+    onDownloadBundle: (RegistryBundle) -> Unit,
     onCreate: (
         name: String,
         useCustomPackage: Boolean,
@@ -241,7 +279,7 @@ private fun CreateInstanceScreen(
                 value = name,
                 onValueChange = { name = it },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !creating,
+                enabled = !creating && downloadingBundleId == null,
                 singleLine = true,
                 label = { Text("Name (optional)") },
             )
@@ -250,30 +288,33 @@ private fun CreateInstanceScreen(
                 selected = !useCustomPackage && registryBundle == null,
                 title = "Built-in template",
                 description = "Create the instance from the bundled Cordis boilerplate.",
-                enabled = !creating,
+                enabled = !creating && downloadingBundleId == null,
                 onClick = { useCustomPackage = false; registryBundle = null },
             )
             PackageOption(
                 selected = useCustomPackage,
                 title = "Custom package",
                 description = "Extract your package directly into the new instance directory.",
-                enabled = !creating,
+                enabled = !creating && downloadingBundleId == null,
                 onClick = { useCustomPackage = true; registryBundle = null },
             )
 
             if (useCustomPackage) {
-                OutlinedButton(onClick = onSelectPackage, enabled = !creating) {
+                OutlinedButton(onClick = onSelectPackage, enabled = !creating && downloadingBundleId == null) {
                     Text(packageName ?: "Select ZIP or tar.gz package", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
-            downloadedBundles.forEach { bundle ->
-                PackageOption(
+            registryBundles.forEach { bundle ->
+                RegistryPackageOption(
+                    bundle = bundle,
                     selected = registryBundle?.id == bundle.id,
-                    title = "${bundle.name} ${bundle.version}",
-                    description = "Downloaded registry bundle.",
-                    enabled = !creating,
+                    downloaded = bundle.id in downloadedBundleIds,
+                    downloading = bundle.id == downloadingBundleId,
+                    downloadProgress = downloadProgress.takeIf { bundle.id == downloadingBundleId },
+                    enabled = !creating && downloadingBundleId == null,
                     onClick = { useCustomPackage = false; registryBundle = bundle },
+                    onDownload = { onDownloadBundle(bundle) },
                 )
             }
 
@@ -347,7 +388,8 @@ private fun CreateInstanceScreen(
                         startCommand,
                     )
                 },
-                enabled = !creating && portIsValid && (!useCustomPackage || packageName != null),
+                enabled = !creating && downloadingBundleId == null && portIsValid &&
+                    (!useCustomPackage || packageName != null),
             ) {
                 Text("Create")
             }
@@ -365,6 +407,52 @@ private data class PendingCreate(
     val patchPort: Boolean,
     val startCommand: String,
 )
+
+private data class BundleDownloadProgress(val downloadedBytes: Long, val totalBytes: Long)
+
+@Composable
+private fun RegistryPackageOption(
+    bundle: RegistryBundle,
+    selected: Boolean,
+    downloaded: Boolean,
+    downloading: Boolean,
+    downloadProgress: BundleDownloadProgress?,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(selected = selected, onClick = onClick, enabled = enabled && downloaded)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("${bundle.name} ${bundle.version}", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (downloaded) "Downloaded registry bundle." else bundle.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            if (!downloaded) {
+                OutlinedButton(onClick = onDownload, enabled = enabled) {
+                    Text(if (downloading) "Downloading" else "Download")
+                }
+            }
+        }
+        if (downloading) {
+            val totalBytes = downloadProgress?.totalBytes ?: -1L
+            if (totalBytes > 0L) {
+                val fraction = (downloadProgress?.downloadedBytes ?: 0L)
+                    .toFloat().div(totalBytes).coerceIn(0f, 1f)
+                LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
 
 @Composable
 private fun BooleanOption(
