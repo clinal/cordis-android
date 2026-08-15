@@ -1,8 +1,11 @@
 package io.github.clinal.cordis.runtime
 
-import android.net.LocalSocket
-import android.util.Log
 import android.content.Context
+import android.net.LocalSocket
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import io.github.clinal.cordis.data.ButtonPatch
 import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.domain.AndroidBridgeStatus
@@ -40,7 +43,9 @@ class AndroidBridgeServer(
     private var writer: BufferedWriter? = null
     private var pollJob: Job? = null
     private var nextRequestId = 0L
-    private val controlShell = AndroidControlShell(context.applicationContext)
+    private val appContext = context.applicationContext
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val controlShell = AndroidControlShell(appContext)
 
     val environment: Map<String, String>
         get() = mapOf(
@@ -177,6 +182,23 @@ class AndroidBridgeServer(
                     instanceRepository.unregisterBridgeButton(instanceId, buttonId)
                 }
                 reply(id, JSONObject())
+            }
+            "toast" -> {
+                val content = params.optString("content")
+                if (content.isBlank()) {
+                    replyError(id, -32602, "missing toast content")
+                } else {
+                    val duration = when (params.optString("duration")) {
+                        "long" -> Toast.LENGTH_LONG
+                        "", "short" -> Toast.LENGTH_SHORT
+                        else -> {
+                            replyError(id, -32602, "toast duration must be short or long")
+                            return
+                        }
+                    }
+                    mainHandler.post { Toast.makeText(appContext, content, duration).show() }
+                    reply(id, JSONObject())
+                }
             }
             "control.execute" -> {
                 if (!controlEnabled) {
