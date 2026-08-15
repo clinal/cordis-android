@@ -111,7 +111,7 @@ private fun BundleManagerScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 Text(
-                    if (picking) "Select registry package" else "Bundles",
+                    if (picking) "Select" else "Bundles",
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.SemiBold,

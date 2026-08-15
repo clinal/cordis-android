@@ -296,20 +296,6 @@ private fun CreateInstanceScreen(
                 onClick = { packageSource = PackageSource.BUILT_IN },
             )
             PackageOption(
-                selected = packageSource == PackageSource.CUSTOM,
-                title = "Custom package",
-                description = "Extract your package directly into the new instance directory.",
-                enabled = !creating,
-                onClick = { packageSource = PackageSource.CUSTOM },
-            )
-
-            if (packageSource == PackageSource.CUSTOM) {
-                OutlinedButton(onClick = onSelectPackage, enabled = !creating) {
-                    Text(packageName ?: "Select ZIP or tar.gz package", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-
-            PackageOption(
                 selected = packageSource == PackageSource.REGISTRY,
                 title = "Registry package",
                 description = "Choose a downloaded package and version from the registry.",
@@ -323,6 +309,18 @@ private fun CreateInstanceScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                }
+            }
+            PackageOption(
+                selected = packageSource == PackageSource.CUSTOM,
+                title = "Custom package",
+                description = "Extract your package directly into the new instance directory.",
+                enabled = !creating,
+                onClick = { packageSource = PackageSource.CUSTOM },
+            )
+            if (packageSource == PackageSource.CUSTOM) {
+                OutlinedButton(onClick = onSelectPackage, enabled = !creating) {
+                    Text(packageName ?: "Select ZIP or tar.gz package", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
