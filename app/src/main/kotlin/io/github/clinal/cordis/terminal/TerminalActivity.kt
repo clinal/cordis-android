@@ -26,6 +26,7 @@ import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import io.github.clinal.cordis.CordisApplication
+import io.github.clinal.cordis.data.InstanceRepository
 import io.github.clinal.cordis.runtime.ProotCommandBuilder
 import io.github.clinal.cordis.runtime.RuntimeInstaller
 import io.github.clinal.cordis.runtime.RuntimePaths
@@ -112,12 +113,15 @@ class TerminalActivity : ComponentActivity(), TerminalViewClient, TerminalSessio
             "Runtime bootstrap assets are not packaged in this build."
         }
 
-        val command = ProotCommandBuilder(paths).loginShellCommand(instance.id)
+        val command = ProotCommandBuilder(paths).loginShellCommand(instance.id, instance.environment)
         return SessionSpec(
             shellPath = command.first(),
             cwd = paths.filesDir.absolutePath,
             args = command.toTypedArray(),
-            env = baseEnv(paths) + "PROOT_TMP_DIR=${paths.tmp.absolutePath}",
+            env = baseEnv(paths) + arrayOf(
+                "PROOT_TMP_DIR=${paths.tmp.absolutePath}",
+                "CORDIS_DNS=${instance.dns.ifBlank { InstanceRepository.DEFAULT_DNS }}",
+            ),
         )
     }
 

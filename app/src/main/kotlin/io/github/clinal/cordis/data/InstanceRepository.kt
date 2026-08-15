@@ -31,6 +31,7 @@ class InstanceRepository(context: Context) {
         hasWebService: Boolean = true,
         patchPort: Boolean = hasWebService,
         startCommand: String = DEFAULT_START_COMMAND,
+        environment: Map<String, String> = emptyMap(),
     ): CordisInstance {
         val nextIndex = nextInstanceIndex()
         val id = instanceId(nextIndex)
@@ -44,6 +45,7 @@ class InstanceRepository(context: Context) {
             hasWebService = hasWebService,
             patchPort = hasWebService && patchPort,
             startCommand = sanitizeStartCommand(startCommand),
+            environment = sanitizeEnvironment(environment),
             status = initialStatus(),
             bridgeStatus = AndroidBridgeStatus.Stopped,
             bridgeButtons = emptyList(),
@@ -80,6 +82,7 @@ class InstanceRepository(context: Context) {
         hasWebService: Boolean,
         patchPort: Boolean,
         startCommand: String,
+        environment: Map<String, String>? = null,
     ) {
         val sanitizedName = name.trim().ifBlank { defaultName(id) }
         val sanitizedPort = port.coerceIn(MIN_PORT, MAX_PORT)
@@ -95,6 +98,7 @@ class InstanceRepository(context: Context) {
                         hasWebService = hasWebService,
                         patchPort = hasWebService && patchPort,
                         startCommand = sanitizeStartCommand(startCommand),
+                        environment = environment?.let(::sanitizeEnvironment) ?: instance.environment,
                     )
                         .also(::saveInstanceConfig)
                 } else {
@@ -262,6 +266,7 @@ class InstanceRepository(context: Context) {
                 startCommand = sanitizeStartCommand(
                     preferences.getString(instanceKey(id, KEY_START_COMMAND), null),
                 ),
+                environment = loadEnvironment(id),
                 status = initialStatus(),
                 bridgeStatus = AndroidBridgeStatus.Stopped,
                 bridgeButtons = emptyList(),
@@ -344,6 +349,7 @@ class InstanceRepository(context: Context) {
             .putBoolean(instanceKey(instance.id, KEY_HAS_WEB_SERVICE), instance.hasWebService)
             .putBoolean(instanceKey(instance.id, KEY_PATCH_PORT), instance.hasWebService && instance.patchPort)
             .putString(instanceKey(instance.id, KEY_START_COMMAND), instance.startCommand)
+            .putString(instanceKey(instance.id, KEY_ENVIRONMENT), JSONObject(instance.environment).toString())
             .apply()
     }
 
@@ -357,6 +363,7 @@ class InstanceRepository(context: Context) {
             .remove(instanceKey(id, KEY_HAS_WEB_SERVICE))
             .remove(instanceKey(id, KEY_PATCH_PORT))
             .remove(instanceKey(id, KEY_START_COMMAND))
+            .remove(instanceKey(id, KEY_ENVIRONMENT))
             .apply()
     }
 
@@ -364,6 +371,21 @@ class InstanceRepository(context: Context) {
 
     private fun sanitizeStartCommand(command: String?): String {
         return command?.trim().takeUnless { it.isNullOrEmpty() } ?: DEFAULT_START_COMMAND
+    }
+
+    private fun sanitizeEnvironment(environment: Map<String, String>): Map<String, String> {
+        return environment.entries
+            .map { (key, value) -> key.trim() to value }
+            .filter { (key) -> ENVIRONMENT_NAME.matches(key) }
+            .associate { it }
+    }
+
+    private fun loadEnvironment(id: String): Map<String, String> {
+        val json = preferences.getString(instanceKey(id, KEY_ENVIRONMENT), null) ?: return emptyMap()
+        return runCatching {
+            val objectValue = JSONObject(json)
+            objectValue.keys().asSequence().associateWith { key -> objectValue.getString(key) }
+        }.getOrElse { emptyMap() }
     }
 
     private fun appendLog(lines: List<String>, line: String?): List<String> {
@@ -413,11 +435,13 @@ class InstanceRepository(context: Context) {
         private const val KEY_HAS_WEB_SERVICE = "has_web_service"
         private const val KEY_PATCH_PORT = "patch_port"
         private const val KEY_START_COMMAND = "start_command"
+        private const val KEY_ENVIRONMENT = "environment"
         private const val KEY_HOME_BUTTONS = "home_buttons"
         private const val INSTANCE_ID_PREFIX = "instance-"
         private const val MIN_PORT = 1024
         private const val MAX_PORT = 65535
         private const val MAX_LOG_LINES = 200
+        private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
     }
 }
 

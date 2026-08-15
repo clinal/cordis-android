@@ -8,6 +8,16 @@ import java.io.File
 
 class ProotCommandBuilderTest {
     @Test
+    fun loginShellCommandPassesInstanceEnvironmentThroughEnv() {
+        val command = loginShellArguments(linkedMapOf("TOKEN" to "value with spaces"))
+
+        assertTrue(command.contains("/usr/bin/env"))
+        assertTrue(command.contains("CORDIS_INSTANCE_ENV_TOKEN=value with spaces"))
+        assertFalse(command.contains("TOKEN=value with spaces"))
+        assertEquals(listOf("/bin/login", "-i"), command.takeLast(2))
+    }
+
+    @Test
     fun cordisProcessCommandUsesQuotedScriptArgumentInsteadOfHeredoc() {
         val command = cordisProcessCommand(
             startCommand = "printf '%s\\n' \"hello world\"",
@@ -44,5 +54,20 @@ class ProotCommandBuilderTest {
             listOf("/bin/tar", "-xzf", "/tmp/cordis-package", "-C", "/home"),
             packageExtractionArguments(PackageArchiveFormat.TarGzip),
         )
+    }
+
+    @Test
+    fun cordisProcessCommandExportsConfiguredEnvironment() {
+        val command = cordisProcessCommand(
+            startCommand = "true",
+            environment = linkedMapOf(
+                "PLAIN" to "value",
+                "QUOTED" to "it's safe",
+            ),
+        )
+
+        assertTrue(command.contains("export PLAIN="))
+        assertTrue(command.contains("export QUOTED="))
+        assertEquals(0, ProcessBuilder("sh", "-n", "-c", command).start().waitFor())
     }
 }

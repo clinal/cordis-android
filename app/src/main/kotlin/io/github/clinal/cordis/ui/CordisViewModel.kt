@@ -35,6 +35,7 @@ class CordisViewModel(application: Application) : AndroidViewModel(application) 
         hasWebService: Boolean,
         patchPort: Boolean,
         startCommand: String,
+        environment: Map<String, String>? = null,
     ) {
         app.instanceRepository.updateInstanceConfig(
             instanceId,
@@ -45,6 +46,7 @@ class CordisViewModel(application: Application) : AndroidViewModel(application) 
             hasWebService,
             patchPort,
             startCommand,
+            environment,
         )
     }
 

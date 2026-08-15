@@ -50,5 +50,8 @@
         <activity
             android:name=".ui.BundleManagerActivity"
             android:exported="false" />
+        <activity
+            android:name=".ui.EnvironmentVariablesActivity"
+            android:exported="false" />
     </application>
 </manifest>

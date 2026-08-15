@@ -12,7 +12,21 @@ writeScriptBin "login" ''
   fi
 
   for var in $(/bin/env | /bin/cut -d '=' -f 1); do
-    unset "$var"
+    case "$var" in
+      CORDIS_INSTANCE_ENV_*) ;;
+      *) unset "$var" ;;
+    esac
+  done
+
+  for var in $(/bin/env | /bin/cut -d '=' -f 1); do
+    case "$var" in
+      CORDIS_INSTANCE_ENV_*)
+        name="''${var#CORDIS_INSTANCE_ENV_}"
+        eval "value=\''${$var}"
+        export "$name=$value"
+        unset "$var"
+        ;;
+    esac
   done
 
   export PATH=/bin
