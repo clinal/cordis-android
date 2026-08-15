@@ -22,6 +22,12 @@ class BundleRegistry(context: Context) {
     private val bundleDir = context.filesDir.resolve("bundles")
     private val registryCache = bundleDir.resolve("registry.json")
 
+    fun load(): List<RegistryBundle> = if (registryCache.isFile) {
+        parse(registryCache.readText())
+    } else {
+        fetch()
+    }
+
     fun fetch(): List<RegistryBundle> {
         return try {
             val connection = URL(REGISTRY_URL).openConnection() as HttpURLConnection

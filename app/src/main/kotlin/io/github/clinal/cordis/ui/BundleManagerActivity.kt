@@ -1,8 +1,13 @@
 package io.github.clinal.cordis.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,25 +29,35 @@ import kotlinx.coroutines.withContext
 
 class BundleManagerActivity : ComponentActivity() {
     private val registry by lazy { BundleRegistry(this) }
+    private val picking by lazy { intent.getBooleanExtra(EXTRA_PICK, false) }
     private var bundles by mutableStateOf<List<RegistryBundle>>(emptyList())
     private var downloaded by mutableStateOf<Set<String>>(emptySet())
-    private var busyId by mutableStateOf<String?>(null)
-    private var downloadProgress by mutableStateOf<DownloadProgress?>(null)
+    private var loading by mutableStateOf(false)
     private var message by mutableStateOf<String?>(null)
+
+    private val versionPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            setResult(Activity.RESULT_OK, result.data)
+            finish()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             CordisTheme {
                 BundleManagerScreen(
-                    bundles,
-                    downloaded,
-                    busyId,
-                    downloadProgress,
-                    message,
-                    ::finish,
-                    ::load,
-                    ::toggle,
+                    bundles = bundles,
+                    downloaded = downloaded,
+                    loading = loading,
+                    message = message,
+                    picking = picking,
+                    onBack = ::finish,
+                    onRefresh = { load(refresh = true) },
+                    onOpen = { name ->
+                        val versionIntent = BundleVersionsActivity.intent(this, name, picking)
+                        if (picking) versionPicker.launch(versionIntent) else startActivity(versionIntent)
+                    },
                 )
             }
         }
@@ -50,93 +65,71 @@ class BundleManagerActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        load()
+        load(refresh = false)
     }
 
-    private fun load() {
-        busyId = REGISTRY_BUSY_ID
-        message = null
-        lifecycleScope.launch {
-            runCatching { withContext(Dispatchers.IO) { registry.fetch().let { it to registry.downloaded(it) } } }
-                .onSuccess { (available, local) -> bundles = available; downloaded = local }
-                .onFailure { message = it.message ?: "Cannot load bundle registry." }
-            busyId = null
-        }
-    }
-
-    private fun toggle(bundle: RegistryBundle) {
-        busyId = bundle.id
-        downloadProgress = null
+    private fun load(refresh: Boolean) {
+        if (loading) return
+        loading = true
         message = null
         lifecycleScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    if (bundle.id in downloaded) {
-                        registry.delete(bundle)
-                    } else {
-                        registry.download(bundle) { downloadedBytes, totalBytes ->
-                            runOnUiThread {
-                                downloadProgress = DownloadProgress(downloadedBytes, totalBytes)
-                            }
-                        }
-                    }
-                    registry.downloaded(bundles)
+                    val available = if (refresh) registry.fetch() else registry.load()
+                    available to registry.downloaded(available)
                 }
-            }.onSuccess { downloaded = it }
-                .onFailure { message = it.message ?: "Bundle operation failed." }
-            busyId = null
-            downloadProgress = null
+            }.onSuccess { (available, local) -> bundles = available; downloaded = local }
+                .onFailure { message = it.message ?: "Cannot load bundle registry." }
+            loading = false
         }
     }
 
-    companion object { private const val REGISTRY_BUSY_ID = "registry" }
+    companion object {
+        private const val EXTRA_PICK = "pick"
+        const val EXTRA_BUNDLE_NAME = "bundleName"
+        const val EXTRA_BUNDLE_VERSION = "bundleVersion"
+
+        fun pickerIntent(context: Context) = Intent(context, BundleManagerActivity::class.java)
+            .putExtra(EXTRA_PICK, true)
+    }
 }
 
 @Composable
 private fun BundleManagerScreen(
-    bundles: List<RegistryBundle>, downloaded: Set<String>, busyId: String?,
-    downloadProgress: DownloadProgress?, message: String?,
-    onBack: () -> Unit, onRefresh: () -> Unit, onToggle: (RegistryBundle) -> Unit,
+    bundles: List<RegistryBundle>,
+    downloaded: Set<String>,
+    loading: Boolean,
+    message: String?,
+    picking: Boolean,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onOpen: (String) -> Unit,
 ) {
+    val groups = bundles.groupBy(RegistryBundle::name).values.sortedBy { it.first().name.lowercase() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                Text("Bundles", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (picking) "Select" else "Bundles",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                OutlinedButton(onClick = onRefresh, enabled = !loading) { Text("Refresh") }
             }
-            if (busyId == "registry") LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (bundles.isEmpty() && busyId == null) {
-                Text("No compatible bundles found.")
-                OutlinedButton(onClick = onRefresh) { Text("Retry") }
-            }
+            if (groups.isEmpty() && !loading) Text("No compatible bundles found.")
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(bundles, key = RegistryBundle::id) { bundle ->
-                    Card {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(bundle.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text("Version ${bundle.version}")
-                            if (bundle.description.isNotBlank()) Text(bundle.description)
-                            Button(onClick = { onToggle(bundle) }, enabled = busyId == null) {
-                                Text(
-                                    when {
-                                        busyId == bundle.id && bundle.id in downloaded -> "Deleting"
-                                        busyId == bundle.id -> "Downloading"
-                                        bundle.id in downloaded -> "Delete"
-                                        else -> "Download"
-                                    },
-                                )
-                            }
-                            if (busyId == bundle.id && bundle.id !in downloaded) {
-                                val totalBytes = downloadProgress?.totalBytes ?: -1L
-                                if (totalBytes > 0L) {
-                                    val fraction = (downloadProgress?.downloadedBytes ?: 0L)
-                                        .toFloat().div(totalBytes).coerceIn(0f, 1f)
-                                    LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-                                } else {
-                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                                }
-                            }
+                items(groups, key = { it.first().name }) { versions ->
+                    val first = versions.first()
+                    val downloadedCount = versions.count { it.id in downloaded }
+                    Card(Modifier.fillMaxWidth().clickable { onOpen(first.name) }) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(first.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            if (first.description.isNotBlank()) Text(first.description)
+                            Text("${versions.size} versions · $downloadedCount downloaded")
                         }
                     }
                 }
@@ -144,5 +137,3 @@ private fun BundleManagerScreen(
         }
     }
 }
-
-private data class DownloadProgress(val downloadedBytes: Long, val totalBytes: Long)
